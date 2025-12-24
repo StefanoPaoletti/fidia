@@ -8,6 +8,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
 <body>
     <div id="root"></div>
@@ -16,8 +17,8 @@
         const { useState, useEffect } = React;
         
         const PRODUCTS = [
-          'PROLENS', 'OPTO RED', 'OPTO SOL', 'OPTO YAL', 'OPTO GEL', 'OPTO IDRO',
-          'OPTO RELAX', 'OPTO VITREO', 'RESPILENS 360', 'OPTO CARE', 'OPTO MYO',
+          'PROLENS', 'OPTO RED', 'OPTO SOL', 'OPTO YAL', 'OPTO YAL CREAM', 'OPTO GEL', 'OPTO IDRO',
+          'OPTO RELAX', 'OPTO VITREO', 'RESPILENS 100', 'RESPILENS 360', 'OPTO CARE', 'OPTO MYO',
           'OPTO OMEGA', 'BLU GEL', 'BLU YAL', 'IRIDIUM GARZE', 'TRIUM',
           'VITREOXIGEN', 'LUTEINOMEGA', 'MERAMIRT', 'MYRIALEN GEL',
           'MERAMIRT CM', 'MERAMIRT XG', 'LACRISEK'
@@ -26,7 +27,7 @@
         const YEARS = ['2019', '2020', '2021', '2022', '2023', '2024', '2025', '2026'];
 
         const SHEET_ID = '1FvExAXdbcPeA3vowfpVm1D4IO68GYF4s5GpzesvAJu8';
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwIovQk-IhbkxQCH95qXVNxrnUy8PeSFTkA3ao2SVBzWYW-vGRk5nx5kBrNAZiRXpbt/exec';
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwwuEWozOVeAr4PGqHubuWuxqE7cQkPPuecb_nwobD4jphIU7yzHtxsyb5u5b-wjTOu/exec';
 
         function App() {
           const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -36,18 +37,21 @@
           const [invoices, setInvoices] = useState([]);
           const [creditNotes, setCreditNotes] = useState([]);
           const [onlinePrices, setOnlinePrices] = useState({});
-          const [selectedYear, setSelectedYear] = useState('2025');
+          const [selectedYear, setSelectedYear] = useState('all');
           const [isLoading, setIsLoading] = useState(false);
 
           const [invoiceDate, setInvoiceDate] = useState('');
           const [invoiceNumber, setInvoiceNumber] = useState('');
           const [invoiceYear, setInvoiceYear] = useState('2025');
+          const [shippingCost, setShippingCost] = useState('');
           const [invoiceItems, setInvoiceItems] = useState([
-            { product: '', quantity: '', price: '', vat: '10', freebies: '' }
+            { product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }
           ]);
 
           const [creditYear, setCreditYear] = useState('2025');
           const [creditAmount, setCreditAmount] = useState('');
+          
+          const [editingInvoice, setEditingInvoice] = useState(null);
 
           useEffect(() => {
             if (isAuthenticated) {
@@ -69,15 +73,19 @@
                     year: row.year,
                     date: row.date,
                     number: row.number,
+                    shippingCost: row.shippingCost || 0,
                     items: []
                   };
                 }
                 invoiceMap[row.id].items.push({
                   product: row.product,
                   quantity: row.quantity,
-                  price: row.price,
+                  price: row.priceGross, // Uso il prezzo LORDO per la modifica
+                  discount: row.discount || 0,
                   vat: row.vat,
-                  freebies: row.freebies
+                  freebies: row.freebies,
+                  priceNet: row.priceNet, // Tengo anche il netto per i calcoli
+                  shippingCost: row.shippingCost || 0
                 });
               });
               
@@ -136,17 +144,42 @@
           };
 
           const saveInvoice = async () => {
-            if (!invoiceDate || !invoiceNumber || invoiceItems.some(item => !item.product || !item.quantity || !item.price)) {
-              alert('Compila tutti i campi obbligatori!');
+            const validItems = invoiceItems.filter(item => 
+              item.product && 
+              item.quantity && 
+              !isNaN(parseFloat(item.quantity)) &&
+              item.price && 
+              !isNaN(parseFloat(item.price))
+            );
+            
+            if (!invoiceDate || !invoiceNumber || validItems.length === 0) {
+              alert('Compila tutti i campi obbligatori! Assicurati che quantità e prezzo siano numeri validi.');
               return;
             }
+
+            const shipping = parseFloat(shippingCost) || 0;
 
             const newInvoice = {
               id: Date.now(),
               date: invoiceDate,
               number: invoiceNumber,
               year: invoiceYear,
-              items: invoiceItems.filter(item => item.product && item.quantity && item.price)
+              shippingCost: shipping,
+              items: validItems.map(item => {
+                const grossPrice = parseFloat(item.price);
+                const discount = parseFloat(item.discount) || 0;
+                const netPrice = grossPrice * (1 - discount / 100);
+                
+                return {
+                  product: item.product,
+                  quantity: parseFloat(item.quantity),
+                  priceGross: grossPrice,    // Prezzo LORDO (prima dello sconto)
+                  priceNet: netPrice,        // Prezzo NETTO (dopo sconto)
+                  discount: discount,
+                  vat: item.vat || '10',
+                  freebies: parseFloat(item.freebies) || 0
+                };
+              })
             };
 
             const success = await saveToGoogleSheets('saveInvoice', newInvoice);
@@ -154,7 +187,8 @@
             if (success) {
               setInvoiceDate('');
               setInvoiceNumber('');
-              setInvoiceItems([{ product: '', quantity: '', price: '', vat: '10', freebies: '' }]);
+              setShippingCost('');
+              setInvoiceItems([{ product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }]);
               alert('Fattura salvata su Google Sheets!');
             }
           };
@@ -184,6 +218,83 @@
               await saveToGoogleSheets('deleteInvoice', { id });
             }
           };
+          
+          const startEditInvoice = (invoice) => {
+            setEditingInvoice(invoice);
+            setInvoiceYear(invoice.year);
+            setInvoiceDate(invoice.date);
+            setInvoiceNumber(invoice.number);
+            setShippingCost(invoice.shippingCost || '');
+            setInvoiceItems(invoice.items.map(item => ({
+              product: item.product || '',
+              quantity: item.quantity || '',
+              price: item.price || '',
+              discount: item.discount || '',
+              vat: item.vat || '10',
+              freebies: item.freebies || ''
+            })));
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          };
+          
+          const cancelEdit = () => {
+            setEditingInvoice(null);
+            setInvoiceDate('');
+            setInvoiceNumber('');
+            setInvoiceYear('2025');
+            setShippingCost('');
+            setInvoiceItems([{ product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }]);
+          };
+          
+          const updateInvoice = async () => {
+            const validItems = invoiceItems.filter(item => 
+              item.product && 
+              item.quantity && 
+              !isNaN(parseFloat(item.quantity)) &&
+              item.price && 
+              !isNaN(parseFloat(item.price))
+            );
+            
+            if (!invoiceDate || !invoiceNumber || validItems.length === 0) {
+              alert('Compila tutti i campi obbligatori! Assicurati che quantità e prezzo siano numeri validi.');
+              return;
+            }
+            
+            const shipping = parseFloat(shippingCost) || 0;
+            
+            // Prima elimina la vecchia fattura
+            await saveToGoogleSheets('deleteInvoice', { id: editingInvoice.id });
+            
+            // Poi salva quella nuova con lo stesso ID
+            const updatedInvoice = {
+              id: editingInvoice.id,
+              date: invoiceDate,
+              number: invoiceNumber,
+              year: invoiceYear,
+              shippingCost: shipping,
+              items: validItems.map(item => {
+                const grossPrice = parseFloat(item.price);
+                const discount = parseFloat(item.discount) || 0;
+                const netPrice = grossPrice * (1 - discount / 100);
+                
+                return {
+                  product: item.product,
+                  quantity: parseFloat(item.quantity),
+                  priceGross: grossPrice,    // Prezzo LORDO (prima dello sconto)
+                  priceNet: netPrice,        // Prezzo NETTO (dopo sconto)
+                  discount: discount,
+                  vat: item.vat || '10',
+                  freebies: parseFloat(item.freebies) || 0
+                };
+              })
+            };
+            
+            const success = await saveToGoogleSheets('saveInvoice', updatedInvoice);
+            
+            if (success) {
+              cancelEdit();
+              alert('Fattura aggiornata!');
+            }
+          };
 
           const deleteCreditNote = async (id) => {
             if (confirm('Sei sicuro di voler eliminare questa nota di credito?')) {
@@ -196,8 +307,32 @@
               await saveToGoogleSheets('saveOnlinePrice', { product, price: parseFloat(price) });
             }
           };
+          
+          const exportDashboardImage = async () => {
+            const dashboardElement = document.getElementById('dashboard-table');
+            if (!dashboardElement) {
+              alert('Errore: tabella non trovata');
+              return;
+            }
+            
+            try {
+              const canvas = await html2canvas(dashboardElement, {
+                backgroundColor: '#ffffff',
+                scale: 2, // Alta qualità
+                logging: false
+              });
+              
+              const link = document.createElement('a');
+              link.download = `analisi-margini-${selectedYear}-${new Date().toISOString().split('T')[0]}.png`;
+              link.href = canvas.toDataURL('image/png');
+              link.click();
+            } catch (error) {
+              console.error('Errore nell\'esportazione:', error);
+              alert('Errore nell\'esportazione dell\'immagine');
+            }
+          };
 
-          const calculateProductAnalysis = () => {
+          const calculateProductAnalysis = (filterYear = null) => {
             const analysis = {};
 
             PRODUCTS.forEach(product => {
@@ -206,33 +341,70 @@
               let yearCost = {};
               let yearQuantity = {};
 
-              invoices.forEach(invoice => {
+              // Filtra le fatture per anno se specificato
+              const filteredInvoices = filterYear && filterYear !== 'all' 
+                ? invoices.filter(inv => String(inv.year) === String(filterYear))
+                : invoices;
+
+              filteredInvoices.forEach(invoice => {
+                // Calcola il numero TOTALE di pezzi nella fattura (per ripartire le spese di spedizione)
+                const totalInvoicePieces = invoice.items.reduce((sum, item) => {
+                  const qty = parseFloat(item.quantity) || 0;
+                  const freebies = parseFloat(item.freebies) || 0;
+                  return sum + qty + freebies;
+                }, 0);
+                const shippingCost = parseFloat(invoice.shippingCost) || 0;
+                
                 invoice.items.forEach(item => {
                   if (item.product === product) {
                     const qty = parseFloat(item.quantity) || 0;
                     const freebies = parseFloat(item.freebies) || 0;
-                    const price = parseFloat(item.price) || 0;
+                    const netPrice = parseFloat(item.priceNet || item.price) || 0; // Uso priceNet se esiste, altrimenti price (per fatture vecchie)
+                    const vat = parseFloat(item.vat) || 0;
                     const totalQty = qty + freebies;
                     
-                    totalCost += qty * price;
+                    // Calcola la quota di spese di spedizione per questo prodotto
+                    // Ripartizione in base al numero di pezzi (semplice ed equa)
+                    const shippingShare = totalInvoicePieces > 0 ? (totalQty / totalInvoicePieces) * shippingCost : 0;
+                    
+                    // Calcolo costo CORRETTO:
+                    // 1. Prezzo netto con IVA del prodotto
+                    const priceWithVAT = (qty * netPrice) * (1 + vat / 100);
+                    
+                    // 2. Quota spedizione con IVA 22% (SEMPRE)
+                    const shippingWithVAT = shippingShare * 1.22;
+                    
+                    // 3. Costo totale
+                    const totalItemCost = priceWithVAT + shippingWithVAT;
+                    
+                    totalCost += totalItemCost;
                     totalQuantity += totalQty;
 
                     if (!yearCost[invoice.year]) {
                       yearCost[invoice.year] = 0;
                       yearQuantity[invoice.year] = 0;
                     }
-                    yearCost[invoice.year] += qty * price;
+                    yearCost[invoice.year] += totalItemCost;
                     yearQuantity[invoice.year] += totalQty;
                   }
                 });
               });
 
               Object.keys(yearCost).forEach(year => {
-                const yearCredit = creditNotes
+                // Applica note di credito solo degli anni considerati
+                const relevantCreditNotes = filterYear && filterYear !== 'all'
+                  ? creditNotes.filter(cn => cn.year === filterYear)
+                  : creditNotes;
+                
+                const yearCredit = relevantCreditNotes
                   .filter(cn => cn.year === year)
                   .reduce((sum, cn) => sum + cn.amount, 0);
 
-                const yearTotal = Object.values(yearCost).reduce((sum, cost) => sum + cost, 0);
+                // FIX: calcola yearTotal solo sugli anni effettivamente considerati
+                const yearTotal = filterYear && filterYear !== 'all' 
+                  ? yearCost[year]  // solo l'anno filtrato
+                  : Object.values(yearCost).reduce((sum, cost) => sum + cost, 0);  // tutti gli anni
+                
                 if (yearTotal > 0) {
                   const proportion = yearCost[year] / yearTotal;
                   yearCost[year] -= yearCredit * proportion;
@@ -294,19 +466,8 @@
             );
           }
 
-          const analysis = calculateProductAnalysis();
-          const filteredAnalysis = selectedYear === 'all' 
-            ? analysis 
-            : Object.fromEntries(
-                Object.entries(analysis).map(([product, data]) => [
-                  product,
-                  {
-                    ...data,
-                    yearData: data.yearData.filter(y => y.year === selectedYear)
-                  }
-                ])
-              );
-
+          const analysis = calculateProductAnalysis(selectedYear);
+          
           return (
             <div className="min-h-screen bg-gray-50">
               {isLoading && (
@@ -334,6 +495,13 @@
                         className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700"
                       >
                         📊 Apri Google Sheets
+                      </a>
+                      <a 
+                        href="https://app.netlify.com/"
+                        target="_blank"
+                        className="px-3 py-2 bg-teal-600 text-white rounded hover:bg-teal-700"
+                      >
+                        🚀 Netlify
                       </a>
                     </div>
                   </div>
@@ -372,16 +540,24 @@
                     <div className="bg-white rounded-lg shadow p-6">
                       <div className="flex justify-between items-center mb-4">
                         <h2 className="text-xl font-bold">Analisi Margini</h2>
-                        <select
-                          value={selectedYear}
-                          onChange={(e) => setSelectedYear(e.target.value)}
-                          className="px-4 py-2 border rounded"
-                        >
-                          <option value="all">Tutti gli anni</option>
-                          {YEARS.map(year => <option key={year} value={year}>{year}</option>)}
-                        </select>
+                        <div className="flex gap-2 items-center">
+                          <select
+                            value={selectedYear}
+                            onChange={(e) => setSelectedYear(e.target.value)}
+                            className="px-4 py-2 border rounded"
+                          >
+                            <option value="all">Tutti gli anni</option>
+                            {YEARS.map(year => <option key={year} value={year}>{year}</option>)}
+                          </select>
+                          <button
+                            onClick={exportDashboardImage}
+                            className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center gap-2"
+                          >
+                            📸 Esporta Immagine
+                          </button>
+                        </div>
                       </div>
-                      <div className="overflow-x-auto">
+                      <div id="dashboard-table" className="overflow-x-auto">
                         <table className="w-full">
                           <thead>
                             <tr className="bg-gray-100">
@@ -394,7 +570,8 @@
                             </tr>
                           </thead>
                           <tbody>
-                            {Object.entries(filteredAnalysis)
+                            {Object.entries(analysis)
+                              .filter(([product, data]) => data.totalQuantity > 0) // Mostra solo prodotti con quantità > 0
                               .sort(([, a], [, b]) => a.margin - b.margin)
                               .map(([product, data]) => (
                                 <tr key={product} className="border-b hover:bg-gray-50">
@@ -416,6 +593,46 @@
                                   </td>
                                 </tr>
                               ))}
+                            {(() => {
+                              // Calcolo totali
+                              const productsWithQty = Object.entries(analysis).filter(([, data]) => data.totalQuantity > 0);
+                              const totalRevenue = productsWithQty.reduce((sum, [, data]) => 
+                                sum + (data.onlinePrice * data.totalQuantity), 0
+                              );
+                              const totalCost = productsWithQty.reduce((sum, [, data]) => 
+                                sum + (data.avgRealCost * data.totalQuantity), 0
+                              );
+                              const weightedMargin = totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue * 100) : 0;
+                              
+                              return (
+                                <>
+                                  <tr className="border-t-2 border-gray-400 bg-gray-50 font-bold">
+                                    <td className="px-4 py-3" colSpan="6"></td>
+                                  </tr>
+                                  <tr className="bg-blue-50 font-semibold">
+                                    <td className="px-4 py-3">📊 FATTURATO TOTALE STIMATO</td>
+                                    <td className="px-4 py-3 text-right" colSpan="2">€ {totalRevenue.toFixed(2)}</td>
+                                    <td className="px-4 py-3" colSpan="3"></td>
+                                  </tr>
+                                  <tr className="bg-orange-50 font-semibold">
+                                    <td className="px-4 py-3">💰 COSTO TOTALE REALE</td>
+                                    <td className="px-4 py-3 text-right" colSpan="2">€ {totalCost.toFixed(2)}</td>
+                                    <td className="px-4 py-3" colSpan="3"></td>
+                                  </tr>
+                                  <tr className={`font-bold text-lg ${weightedMargin < 20 ? 'bg-red-100' : weightedMargin < 30 ? 'bg-yellow-100' : 'bg-green-100'}`}>
+                                    <td className="px-4 py-3">📈 MARGINE MEDIO PONDERATO</td>
+                                    <td className="px-4 py-3 text-right" colSpan="2"></td>
+                                    <td className={`px-4 py-3 text-right ${weightedMargin < 20 ? 'text-red-600' : weightedMargin < 30 ? 'text-yellow-600' : 'text-green-600'}`}>
+                                      {weightedMargin.toFixed(1)}%
+                                    </td>
+                                    <td className="px-4 py-3" colSpan="2"></td>
+                                    <td className="px-4 py-3 text-center text-2xl">
+                                      {weightedMargin < 20 ? '❌' : weightedMargin < 30 ? '⚠️' : '✅'}
+                                    </td>
+                                  </tr>
+                                </>
+                              );
+                            })()}
                           </tbody>
                         </table>
                       </div>
@@ -426,8 +643,10 @@
                 {activeTab === 'invoices' && (
                   <div className="space-y-6">
                     <div className="bg-white rounded-lg shadow p-6">
-                      <h2 className="text-xl font-bold mb-4">Nuova Fattura</h2>
-                      <div className="grid grid-cols-3 gap-4 mb-4">
+                      <h2 className="text-xl font-bold mb-4">
+                        {editingInvoice ? '✏️ Modifica Fattura' : 'Nuova Fattura'}
+                      </h2>
+                      <div className="grid grid-cols-4 gap-4 mb-4">
                         <div>
                           <label className="block text-sm font-medium mb-1">Anno</label>
                           <select value={invoiceYear} onChange={(e) => setInvoiceYear(e.target.value)} className="w-full px-3 py-2 border rounded">
@@ -442,15 +661,26 @@
                           <label className="block text-sm font-medium mb-1">Numero Fattura</label>
                           <input type="text" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="es. 3060003884" className="w-full px-3 py-2 border rounded" />
                         </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Spese Spedizione €</label>
+                          <input type="number" step="0.01" value={shippingCost} onChange={(e) => setShippingCost(e.target.value)} placeholder="0.00" className="w-full px-3 py-2 border rounded" />
+                        </div>
                       </div>
+                      
+                      {shippingCost && parseFloat(shippingCost) > 0 && (
+                        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+                          ℹ️ Le spese di spedizione (€{parseFloat(shippingCost).toFixed(2)}) verranno divise equamente per il numero totale di pezzi della fattura (con IVA 22%).
+                        </div>
+                      )}
 
                       <div className="overflow-x-auto">
                         <table className="w-full mb-4">
                           <thead>
                             <tr className="bg-gray-100">
+                              <th className="px-2 py-2 text-left">Quantità</th>
                               <th className="px-2 py-2 text-left">Prodotto</th>
-                              <th className="px-2 py-2 text-left">Qtà Pagata</th>
                               <th className="px-2 py-2 text-left">Prezzo Unit. €</th>
+                              <th className="px-2 py-2 text-left">Sconto %</th>
                               <th className="px-2 py-2 text-left">IVA %</th>
                               <th className="px-2 py-2 text-left">Omaggi</th>
                               <th className="px-2 py-2"></th>
@@ -460,16 +690,19 @@
                             {invoiceItems.map((item, index) => (
                               <tr key={index} className="border-b">
                                 <td className="px-2 py-2">
+                                  <input type="number" value={item.quantity} onChange={(e) => updateInvoiceItem(index, 'quantity', e.target.value)} className="w-full px-2 py-1 border rounded text-sm" />
+                                </td>
+                                <td className="px-2 py-2">
                                   <select value={item.product} onChange={(e) => updateInvoiceItem(index, 'product', e.target.value)} className="w-full px-2 py-1 border rounded text-sm">
                                     <option value="">Seleziona...</option>
                                     {PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
                                   </select>
                                 </td>
                                 <td className="px-2 py-2">
-                                  <input type="number" value={item.quantity} onChange={(e) => updateInvoiceItem(index, 'quantity', e.target.value)} className="w-full px-2 py-1 border rounded text-sm" />
+                                  <input type="number" step="0.01" value={item.price} onChange={(e) => updateInvoiceItem(index, 'price', e.target.value)} className="w-full px-2 py-1 border rounded text-sm" placeholder="Prezzo lordo" />
                                 </td>
                                 <td className="px-2 py-2">
-                                  <input type="number" step="0.01" value={item.price} onChange={(e) => updateInvoiceItem(index, 'price', e.target.value)} className="w-full px-2 py-1 border rounded text-sm" />
+                                  <input type="number" step="0.01" value={item.discount} onChange={(e) => updateInvoiceItem(index, 'discount', e.target.value)} className="w-full px-2 py-1 border rounded text-sm" placeholder="0" />
                                 </td>
                                 <td className="px-2 py-2">
                                   <select value={item.vat} onChange={(e) => updateInvoiceItem(index, 'vat', e.target.value)} className="w-full px-2 py-1 border rounded text-sm">
@@ -495,9 +728,20 @@
                         <button onClick={addInvoiceItem} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">
                           ➕ Aggiungi Riga
                         </button>
-                        <button onClick={saveInvoice} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700" disabled={isLoading}>
-                          💾 Salva Fattura
-                        </button>
+                        {editingInvoice ? (
+                          <>
+                            <button onClick={updateInvoice} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700" disabled={isLoading}>
+                              ✅ Aggiorna Fattura
+                            </button>
+                            <button onClick={cancelEdit} className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500" disabled={isLoading}>
+                              ❌ Annulla
+                            </button>
+                          </>
+                        ) : (
+                          <button onClick={saveInvoice} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700" disabled={isLoading}>
+                            💾 Salva Fattura
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -517,9 +761,14 @@
                                   ))}
                                 </div>
                               </div>
-                              <button onClick={() => deleteInvoice(invoice.id)} className="text-red-600 hover:text-red-800" disabled={isLoading}>
-                                🗑️
-                              </button>
+                              <div className="flex gap-2">
+                                <button onClick={() => startEditInvoice(invoice)} className="text-blue-600 hover:text-blue-800" disabled={isLoading}>
+                                  ✏️
+                                </button>
+                                <button onClick={() => deleteInvoice(invoice.id)} className="text-red-600 hover:text-red-800" disabled={isLoading}>
+                                  🗑️
+                                </button>
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -600,5 +849,5 @@
 
         ReactDOM.render(<App />, document.getElementById('root'));
     </script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9b29aa319d46ea45',t:'MTc2NjUxMTg0NC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
