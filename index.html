@@ -600,60 +600,57 @@
                         </div>
                       </div>
                       
-                      {(() => {
-                        // Calcolo statistiche omaggi
-                        const filteredInvoices = selectedYear === 'all' 
-                          ? invoices 
-                          : invoices.filter(inv => inv.year === selectedYear);
-                        
-                        let totalFreebies = 0;
-                        let totalFreebiesValue = 0;
-                        let totalPurchaseValue = 0;
-                        
-                        filteredInvoices.forEach(invoice => {
-                          invoice.items.forEach(item => {
-                            const qty = parseFloat(item.quantity) || 0;
-                            const freebies = parseFloat(item.freebies) || 0;
-                            const netPrice = parseFloat(item.priceNet || item.price) || 0;
-                            const vat = parseFloat(item.vat) || 0;
-                            
-                            const priceWithVAT = netPrice * (1 + vat / 100);
-                            
-                            totalFreebies += freebies;
-                            totalFreebiesValue += freebies * priceWithVAT;
-                            totalPurchaseValue += qty * priceWithVAT;
-                          });
-                        });
-                        
-                        const freebiesPercentage = totalPurchaseValue > 0 
-                          ? (totalFreebiesValue / totalPurchaseValue * 100) 
-                          : 0;
-                        
-                        if (totalFreebies > 0) {
-                          return (
-                            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4 mb-4">
-                              <h3 className="font-bold text-green-800 mb-3">Statistiche Omaggi {selectedYear !== 'all' ? selectedYear : ''}</h3>
-                              <div className="grid grid-cols-3 gap-4">
-                                <div className="text-center">
-                                  <div className="text-2xl font-bold text-green-700">{totalFreebies.toFixed(0)}</div>
-                                  <div className="text-sm text-gray-600">Pezzi Omaggio</div>
-                                </div>
-                                <div className="text-center">
-                                  <div className="text-2xl font-bold text-green-700">€ {totalFreebiesValue.toFixed(2)}</div>
-                                  <div className="text-sm text-gray-600">Valore Omaggi</div>
-                                </div>
-                                <div className="text-center">
-                                  <div className="text-2xl font-bold text-green-700">{freebiesPercentage.toFixed(1)}%</div>
-                                  <div className="text-sm text-gray-600">Sconto in Merce</div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()}
-                      
                       <div id="dashboard-table" className="overflow-x-auto">
+                        {(() => {
+                          // Calcolo statistiche omaggi
+                          const filteredInvoices = selectedYear === 'all' 
+                            ? invoices 
+                            : invoices.filter(inv => String(inv.year) === String(selectedYear));
+                          
+                          let totalFreebies = 0;
+                          let totalFreebiesValue = 0;
+                          let totalPurchaseValue = 0;
+                          
+                          filteredInvoices.forEach(invoice => {
+                            invoice.items.forEach(item => {
+                              const qty = parseFloat(item.quantity) || 0;
+                              const freebies = parseFloat(item.freebies) || 0;
+                              const netPrice = parseFloat(item.priceNet || item.price) || 0;
+                              const vat = parseFloat(item.vat) || 0;
+                              
+                              const priceWithVAT = netPrice * (1 + vat / 100);
+                              
+                              totalFreebies += freebies;
+                              totalFreebiesValue += freebies * priceWithVAT;
+                              totalPurchaseValue += qty * priceWithVAT;
+                            });
+                          });
+                          
+                          const freebiesPercentage = totalPurchaseValue > 0 
+                            ? (totalFreebiesValue / totalPurchaseValue * 100) 
+                            : 0;
+                          
+                          return (
+                            <>
+                              {totalFreebies > 0 && (
+                                <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4 mb-4">
+                                  <h3 className="font-bold text-green-800 mb-3">Statistiche Omaggi {selectedYear !== 'all' ? selectedYear : ''}</h3>
+                                  <div className="grid grid-cols-3 gap-4">
+                                    <div className="text-center">
+                                      <div className="text-2xl font-bold text-green-700">{totalFreebies.toFixed(0)}</div>
+                                      <div className="text-sm text-gray-600">Pezzi Omaggio</div>
+                                    </div>
+                                    <div className="text-center">
+                                      <div className="text-2xl font-bold text-green-700">€ {totalFreebiesValue.toFixed(2)}</div>
+                                      <div className="text-sm text-gray-600">Valore Omaggi</div>
+                                    </div>
+                                    <div className="text-center">
+                                      <div className="text-2xl font-bold text-green-700">{freebiesPercentage.toFixed(1)}%</div>
+                                      <div className="text-sm text-gray-600">Sconto in Merce</div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                         <table className="w-full">
                           <thead>
                             <tr className="bg-gray-100">
@@ -731,6 +728,9 @@
                             })()}
                           </tbody>
                         </table>
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
