@@ -545,13 +545,6 @@
                       >
                         🚪 Logout
                       </button>
-                      <a 
-                        href="https://app.netlify.com/"
-                        target="_blank"
-                        className="px-3 py-2 bg-teal-600 text-white rounded hover:bg-teal-700"
-                      >
-                        🚀 Netlify
-                      </a>
                     </div>
                   </div>
                   <div className="flex gap-4 mt-4">
@@ -659,17 +652,17 @@
                                     <td className="px-4 py-3" colSpan="6"></td>
                                   </tr>
                                   <tr className="bg-blue-50 font-semibold">
-                                    <td className="px-4 py-3">📊 FATTURATO TOTALE STIMATO</td>
+                                    <td className="px-4 py-3">STIMA INCASSO</td>
                                     <td className="px-4 py-3 text-right" colSpan="2">€ {totalRevenue.toFixed(2)}</td>
                                     <td className="px-4 py-3" colSpan="3"></td>
                                   </tr>
                                   <tr className="bg-orange-50 font-semibold">
-                                    <td className="px-4 py-3">💰 COSTO TOTALE REALE</td>
+                                    <td className="px-4 py-3">COSTO TOTALE REALE</td>
                                     <td className="px-4 py-3 text-right" colSpan="2">€ {totalCost.toFixed(2)}</td>
                                     <td className="px-4 py-3" colSpan="3"></td>
                                   </tr>
                                   <tr className={`font-bold text-lg ${weightedMargin < 20 ? 'bg-red-100' : weightedMargin < 30 ? 'bg-yellow-100' : 'bg-green-100'}`}>
-                                    <td className="px-4 py-3">📈 MARGINE MEDIO PONDERATO</td>
+                                    <td className="px-4 py-3">MARGINE MEDIO PONDERATO</td>
                                     <td className="px-4 py-3 text-right" colSpan="2"></td>
                                     <td className={`px-4 py-3 text-right ${weightedMargin < 20 ? 'text-red-600' : weightedMargin < 30 ? 'text-yellow-600' : 'text-green-600'}`}>
                                       {weightedMargin.toFixed(1)}%
