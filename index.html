@@ -23,9 +23,12 @@
           'VITREOXIGEN', 'LUTEINOMEGA', 'MERAMIRT', 'MYRIALEN GEL',
           'MERAMIRT CM', 'MERAMIRT XG', 'LACRISEK'
         ];
+        
         const YEARS = ['2019', '2020', '2021', '2022', '2023', '2024', '2025', '2026'];
+        
         const SHEET_ID = '1FvExAXdbcPeA3vowfpVm1D4IO68GYF4s5GpzesvAJu8';
         const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyX5dwnxE0LeYXgpBTvOZ5l6RR63JLw5qSQQBAcREdrw2DFc6fz9RZELn_noz1qxq2v/exec';
+        
         function App() {
           const [isAuthenticated, setIsAuthenticated] = useState(false);
           const [password, setPassword] = useState('');
@@ -37,6 +40,7 @@
           const [onlinePrices, setOnlinePrices] = useState({});
           const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
           const [isLoading, setIsLoading] = useState(false);
+          
           // Form fattura
           const [invoiceDate, setInvoiceDate] = useState('');
           const [invoiceNumber, setInvoiceNumber] = useState('');
@@ -46,11 +50,14 @@
             { product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }
           ]);
           const [editingInvoice, setEditingInvoice] = useState(null);
+          
           // Form nota credito
           const [creditYear, setCreditYear] = useState(new Date().getFullYear().toString());
           const [creditAmount, setCreditAmount] = useState('');
+          
           // Timer per prezzi online
           const priceTimerRef = useRef(null);
+          
           useEffect(() => {
             const stored = localStorage.getItem('fidiaAppPassword');
             if (stored) {
@@ -59,6 +66,7 @@
               loadFromGoogleSheets(stored);
             }
           }, []);
+          
           const loadFromGoogleSheets = async (pwd = savedPassword) => {
             if (!pwd) return;
             setIsLoading(true);
@@ -66,11 +74,13 @@
               const response = await fetch(SCRIPT_URL + '?password=' + encodeURIComponent(pwd));
               if (!response.ok) throw new Error('Errore server');
               const data = await response.json();
+              
               if (data.success === false || data.error === "Password errata") {
                 alert('Password errata. Reinseriscila.');
                 handleLogout();
                 return;
               }
+              
               const invoiceMap = {};
               data.invoices.forEach(row => {
                 if (!invoiceMap[row.id]) {
@@ -90,10 +100,10 @@
                   discount: row.discount || 0,
                   vat: row.vat,
                   freebies: row.freebies,
-                  priceNet: row.priceNet,
-                  shippingCost: row.shippingCost || 0
+                  priceNet: row.priceNet
                 });
               });
+              
               setInvoices(Object.values(invoiceMap));
               setCreditNotes(data.creditNotes || []);
               setOnlinePrices(data.onlinePrices || {});
@@ -104,16 +114,27 @@
             }
             setIsLoading(false);
           };
+          
           const saveToGoogleSheets = async (action, payload) => {
             if (!savedPassword) return false;
             setIsLoading(true);
             try {
-              await fetch(SCRIPT_URL, {
+              const response = await fetch(SCRIPT_URL, {
                 method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
                 body: JSON.stringify({ password: savedPassword, action, ...payload }),
-                mode: 'no-cors'
+                mode: 'cors'
               });
-              await new Promise(r => setTimeout(r, 1200));
+              
+              const result = await response.json();
+              
+              if (result.success === false) {
+                throw new Error(result.error || 'Errore sconosciuto');
+              }
+              
+              await new Promise(r => setTimeout(r, 1000));
               await loadFromGoogleSheets();
               return true;
             } catch (error) {
@@ -123,6 +144,7 @@
               return false;
             }
           };
+          
           const handleLogin = () => {
             if (!password) return alert('Inserisci la password!');
             localStorage.setItem('fidiaAppPassword', password);
@@ -130,6 +152,7 @@
             setIsAuthenticated(true);
             loadFromGoogleSheets(password);
           };
+          
           const handleLogout = () => {
             localStorage.removeItem('fidiaAppPassword');
             setSavedPassword('');
@@ -139,6 +162,7 @@
             setCreditNotes([]);
             setOnlinePrices({});
           };
+          
           const addInvoiceItem = () => setInvoiceItems([...invoiceItems, { product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }]);
           const removeInvoiceItem = index => setInvoiceItems(invoiceItems.filter((_, i) => i !== index));
           const updateInvoiceItem = (index, field, value) => {
@@ -146,6 +170,7 @@
             updated[index][field] = value;
             setInvoiceItems(updated);
           };
+          
           const resetForm = () => {
             setEditingInvoice(null);
             setInvoiceDate('');
@@ -154,9 +179,11 @@
             setInvoiceYear(new Date().getFullYear().toString());
             setInvoiceItems([{ product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }]);
           };
+          
           const saveInvoice = async () => {
             const validItems = invoiceItems.filter(i => i.product && i.quantity && i.price);
             if (!invoiceDate || !invoiceNumber || validItems.length === 0) return alert('Compila tutti i campi obbligatori!');
+            
             const shipping = parseFloat(shippingCost) || 0;
             const newInvoice = {
               id: Date.now(),
@@ -174,15 +201,18 @@
                 freebies: parseFloat(item.freebies) || 0
               }))
             };
+            
             const success = await saveToGoogleSheets('saveInvoice', newInvoice);
             if (success) {
               resetForm();
               alert('Fattura salvata con successo!');
             }
           };
+          
           const updateInvoice = async () => {
             const validItems = invoiceItems.filter(i => i.product && i.quantity && i.price);
             if (!invoiceDate || !invoiceNumber || validItems.length === 0) return alert('Compila tutti i campi obbligatori!');
+            
             const shipping = parseFloat(shippingCost) || 0;
             const updatedInvoice = {
               id: editingInvoice.id,
@@ -200,16 +230,19 @@
                 freebies: parseFloat(item.freebies) || 0
               }))
             };
+            
             const success = await saveToGoogleSheets('updateInvoice', updatedInvoice);
             if (success) {
               resetForm();
               alert('Fattura aggiornata con successo!');
             }
           };
+          
           const deleteInvoice = async (id) => {
             if (!confirm('Eliminare definitivamente questa fattura?')) return;
             await saveToGoogleSheets('deleteInvoice', { id });
           };
+          
           const startEditInvoice = (invoice) => {
             setEditingInvoice(invoice);
             setInvoiceYear(invoice.year);
@@ -226,6 +259,7 @@
             })));
             window.scrollTo({ top: 0, behavior: 'smooth' });
           };
+          
           const saveCreditNote = async () => {
             if (!creditAmount || parseFloat(creditAmount) <= 0) return alert('Inserisci un importo valido');
             const newNote = {
@@ -239,10 +273,12 @@
               alert('Nota di credito salvata!');
             }
           };
+          
           const deleteCreditNote = async (id) => {
             if (!confirm('Eliminare questa nota di credito?')) return;
             await saveToGoogleSheets('deleteCreditNote', { id });
           };
+          
           const handlePriceChange = (product, value) => {
             const newPrices = { ...onlinePrices, [product]: parseFloat(value) || 0 };
             setOnlinePrices(newPrices);
@@ -253,6 +289,7 @@
               }
             }, 2000);
           };
+          
           const exportDashboardImage = async () => {
             const el = document.getElementById('dashboard-table');
             if (!el) return alert('Errore: tabella non trovata');
@@ -266,56 +303,71 @@
               alert('Errore esportazione immagine');
             }
           };
+          
           // Analisi ottimizzata con useMemo
           const analysis = useMemo(() => {
             const result = {};
+            
             PRODUCTS.forEach(product => {
               let totalCost = 0;
               let totalQuantity = 0;
               let yearCost = {};
               let yearQuantity = {};
+              
               const filteredInvoices = selectedYear === 'all'
                 ? invoices
                 : invoices.filter(inv => String(inv.year) === selectedYear);
+              
               filteredInvoices.forEach(invoice => {
                 const totalPieces = invoice.items.reduce((sum, i) => sum + (parseFloat(i.quantity) || 0) + (parseFloat(i.freebies) || 0), 0);
                 const shipping = parseFloat(invoice.shippingCost) || 0;
+                
                 invoice.items.forEach(item => {
                   if (item.product !== product) return;
+                  
                   const qty = parseFloat(item.quantity) || 0;
                   const free = parseFloat(item.freebies) || 0;
                   const netPrice = parseFloat(item.priceNet || item.price) || 0;
                   const vat = parseFloat(item.vat) || 0;
                   const totalQty = qty + free;
+                  
                   const shippingShare = totalPieces > 0 ? (totalQty / totalPieces) * shipping : 0;
                   const priceWithVAT = qty * netPrice * (1 + vat / 100);
                   const shippingWithVAT = shippingShare * 1.22;
                   const itemCost = priceWithVAT + shippingWithVAT;
+                  
                   totalCost += itemCost;
                   totalQuantity += totalQty;
+                  
                   if (!yearCost[invoice.year]) yearCost[invoice.year] = 0;
                   if (!yearQuantity[invoice.year]) yearQuantity[invoice.year] = 0;
                   yearCost[invoice.year] += itemCost;
                   yearQuantity[invoice.year] += totalQty;
                 });
               });
+              
               // Note di credito proporzionali
               const relevantCredits = selectedYear === 'all' ? creditNotes : creditNotes.filter(c => c.year === selectedYear);
               const totalAllYearsCost = Object.values(yearCost).reduce((a, b) => a + b, 0);
+              
               relevantCredits.forEach(c => {
                 if (yearCost[c.year] && totalAllYearsCost > 0) {
                   const prop = yearCost[c.year] / totalAllYearsCost;
                   yearCost[c.year] -= c.amount * prop;
                 }
               });
+              
               const finalCost = Object.values(yearCost).reduce((a, b) => a + b, 0);
               const avgCost = totalQuantity > 0 ? finalCost / totalQuantity : 0;
               const online = onlinePrices[product] || 0;
               const margin = online > 0 ? ((online - avgCost) / online) * 100 : 0;
+              
               result[product] = { avgRealCost: avgCost, onlinePrice: online, margin, totalQuantity };
             });
+            
             return result;
           }, [invoices, creditNotes, onlinePrices, selectedYear]);
+          
           if (!isAuthenticated) {
             return (
               <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -343,16 +395,18 @@
               </div>
             );
           }
+          
           return (
             <div className="min-h-screen bg-gray-50">
               {isLoading && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
                   <div className="bg-white rounded-lg p-8 flex items-center gap-4 shadow-2xl">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600"></div>
-                    <span className="text-xl font-medium">Sincronizzazione con Google Sheets...</span>
+                    <span className="text-xl font-medium">Sincronizzazione...</span>
                   </div>
                 </div>
               )}
+              
               <div className="bg-white shadow">
                 <div className="max-w-7xl mx-auto px-4 py-4">
                   <div className="flex justify-between items-center">
@@ -382,6 +436,7 @@
                   </div>
                 </div>
               </div>
+              
               <div className="max-w-7xl mx-auto px-4 py-8">
                 {/* DASHBOARD */}
                 {activeTab === 'dashboard' && (
@@ -399,11 +454,12 @@
                           </button>
                         </div>
                       </div>
+                      
                       <div id="dashboard-table" className="overflow-x-auto">
-                        {/* Statistiche omaggi */}
                         {(() => {
                           const filtered = selectedYear === 'all' ? invoices : invoices.filter(i => String(i.year) === selectedYear);
                           let totalFree = 0, totalFreeValue = 0, totalPurchaseValue = 0;
+                          
                           filtered.forEach(inv => {
                             inv.items.forEach(item => {
                               const qty = parseFloat(item.quantity) || 0;
@@ -416,7 +472,9 @@
                               totalPurchaseValue += qty * priceIVA;
                             });
                           });
+                          
                           const perc = totalPurchaseValue > 0 ? (totalFreeValue / totalPurchaseValue) * 100 : 0;
+                          
                           return totalFree > 0 && (
                             <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-300 rounded-lg p-5 mb-6">
                               <h3 className="font-bold text-green-800 mb-4 text-lg">Statistiche Omaggi {selectedYear !== 'all' ? selectedYear : ''}</h3>
@@ -437,6 +495,7 @@
                             </div>
                           );
                         })()}
+                        
                         <table className="w-full text-sm">
                           <thead className="bg-gray-100">
                             <tr>
@@ -466,11 +525,13 @@
                                   </td>
                                 </tr>
                               ))}
+                            
                             {(() => {
                               const activeProducts = Object.entries(analysis).filter(([, d]) => d.totalQuantity > 0);
                               const revenue = activeProducts.reduce((s, [, d]) => s + d.onlinePrice * d.totalQuantity, 0);
                               const cost = activeProducts.reduce((s, [, d]) => s + d.avgRealCost * d.totalQuantity, 0);
                               const weightedMargin = revenue > 0 ? ((revenue - cost) / revenue) * 100 : 0;
+                              
                               return (
                                 <>
                                   <tr className="border-t-4 border-gray-400 bg-gray-100 font-bold">
@@ -505,6 +566,7 @@
                     </div>
                   </div>
                 )}
+                
                 {/* FATTURE */}
                 {activeTab === 'invoices' && (
                   <div className="space-y-8">
@@ -512,6 +574,7 @@
                       <h2 className="text-2xl font-bold mb-6">
                         {editingInvoice ? '✏️ Modifica Fattura' : '📄 Nuova Fattura'}
                       </h2>
+                      
                       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                         <div>
                           <label className="block text-sm font-medium mb-1">Anno</label>
@@ -532,18 +595,20 @@
                           <input type="number" step="0.01" value={shippingCost} onChange={e => setShippingCost(e.target.value)} placeholder="0.00" className="w-full px-4 py-2 border rounded-lg" />
                         </div>
                       </div>
+                      
                       {shippingCost && parseFloat(shippingCost) > 0 && (
                         <div className="mb-6 p-4 bg-blue-50 border border-blue-300 rounded-lg text-blue-800">
-                          ℹ️ Le spese di spedizione (€{parseFloat(shippingCost).toFixed(2)}) saranno ripartite proporzionalmente al numero di pezzi (IVA 22%).
+                          ℹ️ Le spese di spedizione (€{parseFloat(shippingCost).toFixed(2)}) saranno ripartite proporzionalmente (IVA 22%).
                         </div>
                       )}
+                      
                       <div className="overflow-x-auto mb-6">
                         <table className="w-full">
                           <thead className="bg-gray-100">
                             <tr>
                               <th className="px-3 py-2 text-left">Qtà</th>
                               <th className="px-3 py-2 text-left">Prodotto</th>
-                              <th className="px-3 py-2 text-left">Prezzo Unit. €</th>
+                              <th className="px-3 py-2 text-left">Prezzo €</th>
                               <th className="px-3 py-2 text-left">Sconto %</th>
                               <th className="px-3 py-2 text-left">IVA %</th>
                               <th className="px-3 py-2 text-left">Omaggi</th>
@@ -553,40 +618,60 @@
                           <tbody>
                             {invoiceItems.map((item, i) => (
                               <tr key={i} className="border-b">
-                                <td className="px-3 py-2"><input type="number" value={item.quantity} onChange={e => updateInvoiceItem(i, 'quantity', e.target.value)} className="w-full px-2 py-1 border rounded" /></td>
+                                <td className="px-3 py-2">
+                                  <input type="number" value={item.quantity} onChange={e => updateInvoiceItem(i, 'quantity', e.target.value)} className="w-full px-2 py-1 border rounded" />
+                                </td>
                                 <td className="px-3 py-2">
                                   <select value={item.product} onChange={e => updateInvoiceItem(i, 'product', e.target.value)} className="w-full px-2 py-1 border rounded">
                                     <option value="">Seleziona...</option>
                                     {PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
                                   </select>
                                 </td>
-                                <td className="px-3 py-2"><input type="number" step="0.01" value={item.price} onChange={e => updateInvoiceItem(i, 'price', e.target.value)} placeholder="lordo" className="w-full px-2 py-1 border rounded" /></td>
-                                <td className="px-3 py-2"><input type="number" step="0.01" value={item.discount} onChange={e => updateInvoiceItem(i, 'discount', e.target.value)} placeholder="0" className="w-full px-2 py-1 border rounded" /></td>
+                                <td className="px-3 py-2">
+                                  <input type="number" step="0.01" value={item.price} onChange={e => updateInvoiceItem(i, 'price', e.target.value)} placeholder="lordo" className="w-full px-2 py-1 border rounded" />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <input type="number" step="0.01" value={item.discount} onChange={e => updateInvoiceItem(i, 'discount', e.target.value)} placeholder="0" className="w-full px-2 py-1 border rounded" />
+                                </td>
                                 <td className="px-3 py-2">
                                   <select value={item.vat} onChange={e => updateInvoiceItem(i, 'vat', e.target.value)} className="w-full px-2 py-1 border rounded">
                                     <option value="10">10%</option>
                                     <option value="22">22%</option>
                                   </select>
                                 </td>
-                                <td className="px-3 py-2"><input type="number" value={item.freebies} onChange={e => updateInvoiceItem(i, 'freebies', e.target.value)} placeholder="0" className="w-full px-2 py-1 border rounded" /></td>
-                                <td className="px-3 py-2 text-center"><button onClick={() => removeInvoiceItem(i)} className="text-red-600 hover:text-red-800 text-xl">🗑️</button></td>
+                                <td className="px-3 py-2">
+                                  <input type="number" value={item.freebies} onChange={e => updateInvoiceItem(i, 'freebies', e.target.value)} placeholder="0" className="w-full px-2 py-1 border rounded" />
+                                </td>
+                                <td className="px-3 py-2 text-center">
+                                  <button onClick={() => removeInvoiceItem(i)} className="text-red-600 hover:text-red-800 text-xl">🗑️</button>
+                                </td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
+                      
                       <div className="flex gap-3">
-                        <button onClick={addInvoiceItem} className="px-5 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">➕ Aggiungi riga</button>
+                        <button onClick={addInvoiceItem} className="px-5 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">
+                          ➕ Aggiungi riga
+                        </button>
                         {editingInvoice ? (
                           <>
-                            <button onClick={updateInvoice} disabled={isLoading} className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">✅ Aggiorna</button>
-                            <button onClick={resetForm} className="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600">❌ Annulla</button>
+                            <button onClick={updateInvoice} disabled={isLoading} className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                              ✅ Aggiorna
+                            </button>
+                            <button onClick={resetForm} className="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600">
+                              ❌ Annulla
+                            </button>
                           </>
                         ) : (
-                          <button onClick={saveInvoice} disabled={isLoading} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">💾 Salva Fattura</button>
+                          <button onClick={saveInvoice} disabled={isLoading} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            💾 Salva Fattura
+                          </button>
                         )}
                       </div>
                     </div>
+                    
                     <div className="bg-white rounded-lg shadow p-6">
                       <h2 className="text-2xl font-bold mb-4">Fatture inserite ({invoices.length})</h2>
                       <div className="space-y-3">
@@ -597,7 +682,9 @@
                               {inv.shippingCost > 0 && <div className="text-sm text-gray-600">Spese spedizione: €{inv.shippingCost.toFixed(2)}</div>}
                               <div className="text-sm text-gray-700 mt-2">
                                 {inv.items.map((it, idx) => (
-                                  <div key={idx}>• {it.product}: {it.quantity} pz + {it.freebies || 0} omaggi @ €{it.price} {it.discount > 0 && `(sconto ${it.discount}%)`}</div>
+                                  <div key={idx}>
+                                    • {it.product}: {it.quantity} pz + {it.freebies || 0} omaggi @ €{it.price} {it.discount > 0 && `(sconto ${it.discount}%)`}
+                                  </div>
                                 ))}
                               </div>
                             </div>
@@ -611,6 +698,7 @@
                     </div>
                   </div>
                 )}
+                
                 {/* NOTE DI CREDITO */}
                 {activeTab === 'credits' && (
                   <div className="space-y-8">
@@ -629,11 +717,12 @@
                         </div>
                       </div>
                       <button onClick={saveCreditNote} disabled={isLoading} className="mt-6 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                        💾 Salva Nota di Credito
+                        💾 Salva
                       </button>
                     </div>
+                    
                     <div className="bg-white rounded-lg shadow p-6">
-                      <h2 className="text-2xl font-bold mb-4">Note di Credito Inserite ({creditNotes.length})</h2>
+                      <h2 className="text-2xl font-bold mb-4">Note di Credito ({creditNotes.length})</h2>
                       <div className="space-y-3">
                         {creditNotes.slice().sort((a, b) => b.year - a.year).map(note => (
                           <div key={note.id} className="border rounded-lg p-4 flex justify-between items-center hover:bg-gray-50">
@@ -645,11 +734,12 @@
                     </div>
                   </div>
                 )}
+                
                 {/* PREZZI ONLINE */}
                 {activeTab === 'prices' && (
                   <div className="bg-white rounded-lg shadow p-6">
                     <h2 className="text-2xl font-bold mb-6">Prezzi Online</h2>
-                    <p className="text-gray-600 mb-6">I prezzi si salvano automaticamente dopo 2 secondi dall'ultima modifica.</p>
+                    <p className="text-gray-600 mb-6">I prezzi si salvano automaticamente dopo 2 secondi.</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                       {PRODUCTS.map(product => (
                         <div key={product} className="flex items-center gap-4">
@@ -673,6 +763,7 @@
             </div>
           );
         }
+        
         ReactDOM.render(<App />, document.getElementById('root'));
     </script>
 </body>
