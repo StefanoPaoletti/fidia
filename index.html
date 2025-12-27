@@ -23,9 +23,12 @@
           'VITREOXIGEN', 'LUTEINOMEGA', 'MERAMIRT', 'MYRIALEN GEL',
           'MERAMIRT CM', 'MERAMIRT XG', 'LACRISEK'
         ];
+
         const YEARS = ['2019', '2020', '2021', '2022', '2023', '2024', '2025', '2026'];
+
         const SHEET_ID = '1FvExAXdbcPeA3vowfpVm1D4IO68GYF4s5GpzesvAJu8';
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyX5dwnxE0LeYXgpBTvOZ5l6RR63JLw5qSQQBAcREdrw2DFc6fz9RZELn_noz1qxq2v/exec'; // <-- Verifica che sia l'URL corretto del tuo deployment
+
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyX5dwnxE0LeYXgpBTvOZ5l6RR63JLw5qSQQBAcREdrw2DFc6fz9RZELn_noz1qxq2v/exec'; // Verifica che sia l'URL corretto del tuo deployment attuale
 
         function App() {
           const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -39,7 +42,7 @@
           const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
           const [isLoading, setIsLoading] = useState(false);
 
-          // Form fattura
+          // Form per nuova/modifica fattura
           const [invoiceDate, setInvoiceDate] = useState('');
           const [invoiceNumber, setInvoiceNumber] = useState('');
           const [invoiceYear, setInvoiceYear] = useState(new Date().getFullYear().toString());
@@ -49,13 +52,13 @@
           ]);
           const [editingInvoice, setEditingInvoice] = useState(null);
 
-          // Form nota credito
+          // Form per nota di credito
           const [creditYear, setCreditYear] = useState(new Date().getFullYear().toString());
           const [creditAmount, setCreditAmount] = useState('');
 
           const priceTimerRef = useRef(null);
 
-          // Carica password salvata all'avvio
+          // All'avvio, se c'è password salvata nel localStorage, carica i dati
           useEffect(() => {
             const stored = localStorage.getItem('fidiaAppPassword');
             if (stored) {
@@ -65,24 +68,111 @@
             }
           }, []);
 
-          // Funzione per caricare i dati (usa POST per autenticare + GET per leggere)
+          // Funzione per caricare i dati dal server (usa solo POST)
           const loadFromGoogleSheets = async (pwd = savedPassword) => {
             if (!pwd) return;
             setIsLoading(true);
             try {
-              // Autenticazione con POST
-              const authResponse = await fetch(SCRIPT_URL, {
+              const response = await fetch(SCRIPT_URL, {
                 method: 'POST',
-                body: JSON.stringify({ password: pwd, action: 'read' })
+                body: JSON.stringify({ password: pwd, action: 'readData' })
               });
-              if (!authResponse.ok) throw new Error('Errore autenticazione');
 
-              // Lettura dati con GET semplice
-              const dataResponse = await fetch(SCRIPT_URL);
-              if (!dataResponse.ok) throw new Error('Errore caricamento dati');
-              const data = await dataResponse.json();
+              if (!response.ok) {
+                throw new Error('Errore nella risposta del server');
+              }
 
-              // Raggruppa fatture per ID
+              const data = await response.json();
+
+              // Raggruppa le righe fattura per ID
+              const invoiceMap = {};
+              data.invoices.forEach(row => {
+                if (!invoiceMap[row.id]) {
+                  invoiceMap[row.id] = {
+                    id: row.id,
+                    year: row.year,
+                    date: row.date,
+                    number: row.number,
+                    shippingCost: row.shippingCost || 0,
+                    items: []
+                  };
+                }
+                invoiceMap[row.id].items.push({
+                  product: row.product,
+                  quantity: row.quantity,
+                  price: row.priceGross,         // prezzo netto inserito (prima sconto)
+                  discount: row.discount || 0,
+                  vat: row.vat,
+                  freebies: row.freebies || 0,
+                  priceNet: row.priceNet         // prezzo netto dopo sconto
+                });
+              });
+
+              setInvoices(Object.values(invoiceMap));
+              setCreditNotes(data.creditNotes || []);
+              setOnlinePrices(data.onlinePrices || {});
+
+            } catch (error) {
+              console.error(error);
+              alert('Errore di connessione o password errata.');
+              handleLogout();
+            }
+            setIsLoading(false);
+          };
+
+          // Funzione generica per salvare dati sul server
+          const saveToGoogleSheets = async (action, payload) => {
+            if (!savedPassword) return false;
+            setIsLoading(true);
+            try {
+              const response = await fetch(SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({ password: savedPassword, action, ...payload })
+              });
+
+              if (!response.ok) {
+                throw new Error('Errore salvataggio');
+              }
+
+              // Attesa breve per dare tempo al server di aggiornare
+              await new Promise(resolve => setTimeout(resolve, 1200));
+
+              // Ricarica i dati aggiornati
+              await loadFromGoogleSheets();
+              return true;
+            } catch (error) {
+              console.error(error);
+              alert('Errore durante il salvataggio: ' + error.message);
+              setIsLoading(false);
+              return false;
+            }
+          };
+
+          // Gestione login (usa POST)
+          const handleLogin = async () => {
+            if (!password) {
+              alert('Inserisci la password!');
+              return;
+            }
+            setIsLoading(true);
+            try {
+              const response = await fetch(SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({ password: password, action: 'readData' })
+              });
+
+              if (!response.ok) {
+                throw new Error('Password errata o errore server');
+              }
+
+              const data = await response.json();
+
+              // Salva password in localStorage
+              localStorage.setItem('fidiaAppPassword', password);
+              setSavedPassword(password);
+              setIsAuthenticated(true);
+
+              // Raggruppa fatture dalla risposta
               const invoiceMap = {};
               data.invoices.forEach(row => {
                 if (!invoiceMap[row.id]) {
@@ -102,8 +192,7 @@
                   discount: row.discount || 0,
                   vat: row.vat,
                   freebies: row.freebies || 0,
-                  priceNet: row.priceNet,
-                  shippingCost: row.shippingCost || 0
+                  priceNet: row.priceNet
                 });
               });
 
@@ -111,58 +200,13 @@
               setCreditNotes(data.creditNotes || []);
               setOnlinePrices(data.onlinePrices || {});
 
-            } catch (error) {
-              console.error(error);
-              alert('Errore di connessione o password errata.');
-              handleLogout();
-            }
-            setIsLoading(false);
-          };
-
-          // Salvataggio generico
-          const saveToGoogleSheets = async (action, payload) => {
-            if (!savedPassword) return false;
-            setIsLoading(true);
-            try {
-              const response = await fetch(SCRIPT_URL, {
-                method: 'POST',
-                body: JSON.stringify({ password: savedPassword, action, ...payload })
-              });
-              if (!response.ok) throw new Error('Errore server');
-              await new Promise(r => setTimeout(r, 1200));
-              await loadFromGoogleSheets();
-              return true;
-            } catch (error) {
-              console.error(error);
-              alert('Errore salvataggio: ' + error.message);
-              setIsLoading(false);
-              return false;
-            }
-          };
-
-          // Login con POST
-          const handleLogin = async () => {
-            if (!password) return alert('Inserisci la password!');
-            setIsLoading(true);
-            try {
-              const response = await fetch(SCRIPT_URL, {
-                method: 'POST',
-                body: JSON.stringify({ password: password, action: 'read' })
-              });
-              if (!response.ok) throw new Error('Password errata');
-              const result = await response.json();
-              if (result.success === false) throw new Error('Password errata');
-
-              localStorage.setItem('fidiaAppPassword', password);
-              setSavedPassword(password);
-              setIsAuthenticated(true);
-              await loadFromGoogleSheets(password);
             } catch (err) {
               alert('Password errata o errore di connessione');
             }
             setIsLoading(false);
           };
 
+          // Logout
           const handleLogout = () => {
             localStorage.removeItem('fidiaAppPassword');
             setSavedPassword('');
@@ -173,14 +217,22 @@
             setOnlinePrices({});
           };
 
-          const addInvoiceItem = () => setInvoiceItems([...invoiceItems, { product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }]);
-          const removeInvoiceItem = index => setInvoiceItems(invoiceItems.filter((_, i) => i !== index));
+          // Funzioni per gestire le righe della fattura
+          const addInvoiceItem = () => {
+            setInvoiceItems([...invoiceItems, { product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }]);
+          };
+
+          const removeInvoiceItem = (index) => {
+            setInvoiceItems(invoiceItems.filter((_, i) => i !== index));
+          };
+
           const updateInvoiceItem = (index, field, value) => {
             const updated = [...invoiceItems];
             updated[index][field] = value;
             setInvoiceItems(updated);
           };
 
+          // Resetta il form fattura
           const resetForm = () => {
             setEditingInvoice(null);
             setInvoiceDate('');
@@ -190,9 +242,13 @@
             setInvoiceItems([{ product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }]);
           };
 
+          // Salva nuova fattura
           const saveInvoice = async () => {
             const validItems = invoiceItems.filter(i => i.product && i.quantity && i.price);
-            if (!invoiceDate || !invoiceNumber || validItems.length === 0) return alert('Compila tutti i campi obbligatori!');
+            if (!invoiceDate || !invoiceNumber || validItems.length === 0) {
+              alert('Compila tutti i campi obbligatori!');
+              return;
+            }
 
             const shipping = parseFloat(shippingCost) || 0;
 
@@ -226,9 +282,13 @@
             }
           };
 
+          // Aggiorna fattura esistente
           const updateInvoice = async () => {
             const validItems = invoiceItems.filter(i => i.product && i.quantity && i.price);
-            if (!invoiceDate || !invoiceNumber || validItems.length === 0) return alert('Compila tutti i campi obbligatori!');
+            if (!invoiceDate || !invoiceNumber || validItems.length === 0) {
+              alert('Compila tutti i campi obbligatori!');
+              return;
+            }
 
             const shipping = parseFloat(shippingCost) || 0;
 
@@ -262,11 +322,13 @@
             }
           };
 
+          // Elimina fattura
           const deleteInvoice = async (id) => {
             if (!confirm('Eliminare definitivamente questa fattura?')) return;
             await saveToGoogleSheets('deleteInvoice', { id });
           };
 
+          // Avvia modifica fattura
           const startEditInvoice = (invoice) => {
             setEditingInvoice(invoice);
             setInvoiceYear(invoice.year);
@@ -284,8 +346,12 @@
             window.scrollTo({ top: 0, behavior: 'smooth' });
           };
 
+          // Salva nota di credito
           const saveCreditNote = async () => {
-            if (!creditAmount || parseFloat(creditAmount) <= 0) return alert('Inserisci un importo valido');
+            if (!creditAmount || parseFloat(creditAmount) <= 0) {
+              alert('Inserisci un importo valido');
+              return;
+            }
             const newNote = {
               id: Date.now(),
               year: creditYear,
@@ -298,14 +364,17 @@
             }
           };
 
+          // Elimina nota di credito
           const deleteCreditNote = async (id) => {
             if (!confirm('Eliminare questa nota di credito?')) return;
             await saveToGoogleSheets('deleteCreditNote', { id });
           };
 
+          // Gestione prezzi online con debounce
           const handlePriceChange = (product, value) => {
             const newPrices = { ...onlinePrices, [product]: parseFloat(value) || 0 };
             setOnlinePrices(newPrices);
+
             if (priceTimerRef.current) clearTimeout(priceTimerRef.current);
             priceTimerRef.current = setTimeout(() => {
               if (value !== '') {
@@ -314,9 +383,13 @@
             }, 2000);
           };
 
+          // Esporta dashboard come immagine
           const exportDashboardImage = async () => {
             const el = document.getElementById('dashboard-table');
-            if (!el) return alert('Errore: tabella non trovata');
+            if (!el) {
+              alert('Errore: tabella non trovata');
+              return;
+            }
             try {
               const canvas = await html2canvas(el, { backgroundColor: '#ffffff', scale: 2 });
               const link = document.createElement('a');
@@ -324,10 +397,11 @@
               link.href = canvas.toDataURL('image/png');
               link.click();
             } catch (err) {
-              alert('Errore esportazione immagine');
+              alert('Errore durante l\'esportazione dell\'immagine');
             }
           };
 
+          // Calcolo analisi margini
           const analysis = useMemo(() => {
             const result = {};
             PRODUCTS.forEach(product => {
@@ -354,7 +428,7 @@
 
                   const shippingShare = totalPieces > 0 ? (totalQty / totalPieces) * shipping : 0;
                   const priceWithVAT = totalQty * netAfterDiscount * (1 + vat / 100);
-                  const shippingWithVAT = shippingShare * 1.22; // IVA spedizione sempre 22%
+                  const shippingWithVAT = shippingShare * 1.22;
 
                   const itemCost = priceWithVAT + shippingWithVAT;
 
@@ -368,6 +442,7 @@
                 });
               });
 
+              // Ripartizione note di credito
               const relevantCredits = selectedYear === 'all' ? creditNotes : creditNotes.filter(c => c.year === selectedYear);
               const totalAllYearsCost = Object.values(yearCost).reduce((a, b) => a + b, 0);
               relevantCredits.forEach(c => {
@@ -387,6 +462,7 @@
             return result;
           }, [invoices, creditNotes, onlinePrices, selectedYear]);
 
+          // Schermata di login
           if (!isAuthenticated) {
             return (
               <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -397,8 +473,8 @@
                       <input
                         type={showPassword ? 'text' : 'password'}
                         value={password}
-                        onChange={e => setPassword(e.target.value)}
-                        onKeyPress={e => e.key === 'Enter' && handleLogin()}
+                        onChange={(e) => setPassword(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
                         placeholder="Inserisci password"
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                       />
@@ -415,6 +491,7 @@
             );
           }
 
+          // Schermata principale dopo login
           return (
             <div className="min-h-screen bg-gray-50">
               {isLoading && (
@@ -443,15 +520,10 @@
                     </div>
                   </div>
                   <div className="flex gap-4 mt-6 overflow-x-auto pb-2">
-                    {['dashboard', 'invoices', 'credits', 'prices'].map(tab => (
-                      <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        className={`px-6 py-2 rounded font-medium whitespace-nowrap ${activeTab === tab ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-                      >
-                        {tab === 'dashboard' ? 'Dashboard' : tab === 'invoices' ? 'Fatture' : tab === 'credits' ? 'Note Credito' : 'Prezzi Online'}
-                      </button>
-                    ))}
+                    <button onClick={() => setActiveTab('dashboard')} className={`px-6 py-2 rounded font-medium ${activeTab === 'dashboard' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>Dashboard</button>
+                    <button onClick={() => setActiveTab('invoices')} className={`px-6 py-2 rounded font-medium ${activeTab === 'invoices' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>Fatture</button>
+                    <button onClick={() => setActiveTab('credits')} className={`px-6 py-2 rounded font-medium ${activeTab === 'credits' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>Note Credito</button>
+                    <button onClick={() => setActiveTab('prices')} className={`px-6 py-2 rounded font-medium ${activeTab === 'prices' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>Prezzi Online</button>
                   </div>
                 </div>
               </div>
@@ -464,7 +536,7 @@
                       <div className="flex justify-between items-center mb-6">
                         <h2 className="text-2xl font-bold">Analisi Margini</h2>
                         <div className="flex gap-4 items-center">
-                          <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} className="px-4 py-2 border rounded-lg">
+                          <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className="px-4 py-2 border rounded-lg">
                             <option value="all">Tutti gli anni</option>
                             {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
                           </select>
@@ -474,6 +546,7 @@
                         </div>
                       </div>
                       <div id="dashboard-table" className="overflow-x-auto">
+                        {/* Statistiche omaggi */}
                         {(() => {
                           const filtered = selectedYear === 'all' ? invoices : invoices.filter(i => String(i.year) === selectedYear);
                           let totalFree = 0, totalFreeValue = 0, totalPurchaseValue = 0;
@@ -510,6 +583,7 @@
                             </div>
                           );
                         })()}
+
                         <table className="w-full text-sm">
                           <thead className="bg-gray-100">
                             <tr>
@@ -539,6 +613,8 @@
                                   </td>
                                 </tr>
                               ))}
+
+                            {/* Totali finali */}
                             {(() => {
                               const activeProducts = Object.entries(analysis).filter(([, d]) => d.totalQuantity > 0);
                               const revenue = activeProducts.reduce((s, [, d]) => s + d.onlinePrice * d.totalQuantity, 0);
@@ -589,21 +665,21 @@
                       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                         <div>
                           <label className="block text-sm font-medium mb-1">Anno</label>
-                          <select value={invoiceYear} onChange={e => setInvoiceYear(e.target.value)} className="w-full px-4 py-2 border rounded-lg">
+                          <select value={invoiceYear} onChange={(e) => setInvoiceYear(e.target.value)} className="w-full px-4 py-2 border rounded-lg">
                             {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
                           </select>
                         </div>
                         <div>
                           <label className="block text-sm font-medium mb-1">Data Fattura</label>
-                          <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className="w-full px-4 py-2 border rounded-lg" />
+                          <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className="w-full px-4 py-2 border rounded-lg" />
                         </div>
                         <div>
                           <label className="block text-sm font-medium mb-1">Numero Fattura</label>
-                          <input type="text" value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} placeholder="es. 3060003884" className="w-full px-4 py-2 border rounded-lg" />
+                          <input type="text" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="es. 3060003884" className="w-full px-4 py-2 border rounded-lg" />
                         </div>
                         <div>
                           <label className="block text-sm font-medium mb-1">Spese Spedizione €</label>
-                          <input type="number" step="0.01" value={shippingCost} onChange={e => setShippingCost(e.target.value)} placeholder="0.00" className="w-full px-4 py-2 border rounded-lg" />
+                          <input type="number" step="0.01" value={shippingCost} onChange={(e) => setShippingCost(e.target.value)} placeholder="0.00" className="w-full px-4 py-2 border rounded-lg" />
                         </div>
                       </div>
                       {shippingCost && parseFloat(shippingCost) > 0 && (
@@ -617,7 +693,7 @@
                             <tr>
                               <th className="px-3 py-2 text-left">Qtà</th>
                               <th className="px-3 py-2 text-left">Prodotto</th>
-                              <th className="px-3 py-2 text-left">Prezzo Netto Unit. €<br/><span className="text-xs font-normal">(prima sconto)</span></th>
+                              <th className="px-3 py-2 text-left">Prezzo Netto Unit. €<br /><span className="text-xs font-normal">(prima sconto)</span></th>
                               <th className="px-3 py-2 text-left">Sconto %</th>
                               <th className="px-3 py-2 text-left">IVA %</th>
                               <th className="px-3 py-2 text-left">Omaggi</th>
@@ -627,22 +703,22 @@
                           <tbody>
                             {invoiceItems.map((item, i) => (
                               <tr key={i} className="border-b">
-                                <td className="px-3 py-2"><input type="number" value={item.quantity} onChange={e => updateInvoiceItem(i, 'quantity', e.target.value)} className="w-full px-2 py-1 border rounded" /></td>
+                                <td className="px-3 py-2"><input type="number" value={item.quantity} onChange={(e) => updateInvoiceItem(i, 'quantity', e.target.value)} className="w-full px-2 py-1 border rounded" /></td>
                                 <td className="px-3 py-2">
-                                  <select value={item.product} onChange={e => updateInvoiceItem(i, 'product', e.target.value)} className="w-full px-2 py-1 border rounded">
+                                  <select value={item.product} onChange={(e) => updateInvoiceItem(i, 'product', e.target.value)} className="w-full px-2 py-1 border rounded">
                                     <option value="">Seleziona...</option>
                                     {PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
                                   </select>
                                 </td>
-                                <td className="px-3 py-2"><input type="number" step="0.01" value={item.price} onChange={e => updateInvoiceItem(i, 'price', e.target.value)} placeholder="netto prima sconto" className="w-full px-2 py-1 border rounded" /></td>
-                                <td className="px-3 py-2"><input type="number" step="0.01" value={item.discount} onChange={e => updateInvoiceItem(i, 'discount', e.target.value)} placeholder="0" className="w-full px-2 py-1 border rounded" /></td>
+                                <td className="px-3 py-2"><input type="number" step="0.01" value={item.price} onChange={(e) => updateInvoiceItem(i, 'price', e.target.value)} placeholder="netto prima sconto" className="w-full px-2 py-1 border rounded" /></td>
+                                <td className="px-3 py-2"><input type="number" step="0.01" value={item.discount} onChange={(e) => updateInvoiceItem(i, 'discount', e.target.value)} placeholder="0" className="w-full px-2 py-1 border rounded" /></td>
                                 <td className="px-3 py-2">
-                                  <select value={item.vat} onChange={e => updateInvoiceItem(i, 'vat', e.target.value)} className="w-full px-2 py-1 border rounded">
+                                  <select value={item.vat} onChange={(e) => updateInvoiceItem(i, 'vat', e.target.value)} className="w-full px-2 py-1 border rounded">
                                     <option value="10">10%</option>
                                     <option value="22">22%</option>
                                   </select>
                                 </td>
-                                <td className="px-3 py-2"><input type="number" value={item.freebies} onChange={e => updateInvoiceItem(i, 'freebies', e.target.value)} placeholder="0" className="w-full px-2 py-1 border rounded" /></td>
+                                <td className="px-3 py-2"><input type="number" value={item.freebies} onChange={(e) => updateInvoiceItem(i, 'freebies', e.target.value)} placeholder="0" className="w-full px-2 py-1 border rounded" /></td>
                                 <td className="px-3 py-2 text-center"><button onClick={() => removeInvoiceItem(i)} className="text-red-600 hover:text-red-800 text-xl">🗑️</button></td>
                               </tr>
                             ))}
@@ -695,13 +771,13 @@
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-lg">
                         <div>
                           <label className="block text-sm font-medium mb-1">Anno</label>
-                          <select value={creditYear} onChange={e => setCreditYear(e.target.value)} className="w-full px-4 py-2 border rounded-lg">
+                          <select value={creditYear} onChange={(e) => setCreditYear(e.target.value)} className="w-full px-4 py-2 border rounded-lg">
                             {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
                           </select>
                         </div>
                         <div>
                           <label className="block text-sm font-medium mb-1">Importo €</label>
-                          <input type="number" step="0.01" value={creditAmount} onChange={e => setCreditAmount(e.target.value)} placeholder="es. 250.00" className="w-full px-4 py-2 border rounded-lg" />
+                          <input type="number" step="0.01" value={creditAmount} onChange={(e) => setCreditAmount(e.target.value)} placeholder="es. 250.00" className="w-full px-4 py-2 border rounded-lg" />
                         </div>
                       </div>
                       <button onClick={saveCreditNote} disabled={isLoading} className="mt-6 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
@@ -735,7 +811,7 @@
                             type="number"
                             step="0.01"
                             value={onlinePrices[product] || ''}
-                            onChange={e => handlePriceChange(product, e.target.value)}
+                            onChange={(e) => handlePriceChange(product, e.target.value)}
                             placeholder="0.00"
                             className="flex-1 px-4 py-2 border rounded-lg"
                             disabled={isLoading}
