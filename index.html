@@ -44,7 +44,6 @@
           // Form fattura
           const [invoiceDate, setInvoiceDate] = useState('');
           const [invoiceNumber, setInvoiceNumber] = useState('');
-          const [invoiceYear, setInvoiceYear] = useState(new Date().getFullYear().toString());
           const [shippingCost, setShippingCost] = useState('');
           const [invoiceItems, setInvoiceItems] = useState([
             { product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }
@@ -168,7 +167,6 @@
             setInvoiceDate('');
             setInvoiceNumber('');
             setShippingCost('');
-            setInvoiceYear(new Date().getFullYear().toString());
             setInvoiceItems([{ product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }]);
           };
           
@@ -177,11 +175,13 @@
             if (!invoiceDate || !invoiceNumber || validItems.length === 0) return alert('Compila tutti i campi obbligatori!');
             
             const shipping = parseFloat(shippingCost) || 0;
+            const year = new Date(invoiceDate).getFullYear().toString();
+            
             const newInvoice = {
               id: Date.now(),
               date: invoiceDate,
               number: invoiceNumber,
-              year: invoiceYear,
+              year: year,
               shippingCost: shipping,
               items: validItems.map(item => ({
                 product: item.product,
@@ -206,11 +206,13 @@
             if (!invoiceDate || !invoiceNumber || validItems.length === 0) return alert('Compila tutti i campi obbligatori!');
             
             const shipping = parseFloat(shippingCost) || 0;
+            const year = new Date(invoiceDate).getFullYear().toString();
+            
             const updatedInvoice = {
               id: editingInvoice.id,
               date: invoiceDate,
               number: invoiceNumber,
-              year: invoiceYear,
+              year: year,
               shippingCost: shipping,
               items: validItems.map(item => ({
                 product: item.product,
@@ -237,14 +239,13 @@
           
           const startEditInvoice = (invoice) => {
             setEditingInvoice(invoice);
-            setInvoiceYear(invoice.year);
             setInvoiceDate(invoice.date);
             setInvoiceNumber(invoice.number);
             setShippingCost(invoice.shippingCost || '');
             setInvoiceItems(invoice.items.map(item => ({
               product: item.product,
               quantity: item.quantity,
-              price: item.price,
+              price: item.priceGross,
               discount: item.discount || '',
               vat: item.vat || '10',
               freebies: item.freebies || ''
@@ -567,13 +568,7 @@
                         {editingInvoice ? '✏️ Modifica Fattura' : '📄 Nuova Fattura'}
                       </h2>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Anno</label>
-                          <select value={invoiceYear} onChange={e => setInvoiceYear(e.target.value)} className="w-full px-4 py-2 border rounded-lg">
-                            {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-                          </select>
-                        </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                         <div>
                           <label className="block text-sm font-medium mb-1">Data Fattura</label>
                           <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className="w-full px-4 py-2 border rounded-lg" />
