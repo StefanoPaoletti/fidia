@@ -67,18 +67,11 @@
           }, []);
           
           const loadFromGoogleSheets = async (pwd = savedPassword) => {
-            if (!pwd) return;
             setIsLoading(true);
             try {
-              const response = await fetch(SCRIPT_URL + '?password=' + encodeURIComponent(pwd));
+              const response = await fetch(SCRIPT_URL);
               if (!response.ok) throw new Error('Errore server');
               const data = await response.json();
-              
-              if (data.success === false || data.error === "Password errata") {
-                alert('Password errata. Reinseriscila.');
-                handleLogout();
-                return;
-              }
               
               const invoiceMap = {};
               (data.invoices || []).forEach(row => {
