@@ -12,10 +12,10 @@
 </head>
 <body>
     <div id="root"></div>
-   
+  
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
-       
+      
         const PRODUCTS = [
           'PROLENS', 'OPTO RED', 'OPTO SOL', 'OPTO YAL', 'OPTO YAL CREAM', 'OPTO GEL', 'OPTO IDRO',
           'OPTO RELAX', 'OPTO VITREO', 'RESPILENS 100', 'RESPILENS 360', 'OPTO CARE', 'OPTO MYO',
@@ -26,7 +26,6 @@
         const YEARS = ['2019', '2020', '2021', '2022', '2023', '2024', '2025', '2026'];
         const SHEET_ID = '1FvExAXdbcPeA3vowfpVm1D4IO68GYF4s5GpzesvAJu8';
         const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyX5dwnxE0LeYXgpBTvOZ5l6RR63JLw5qSQQBAcREdrw2DFc6fz9RZELn_noz1qxq2v/exec';
-
         function App() {
           const [isAuthenticated, setIsAuthenticated] = useState(false);
           const [password, setPassword] = useState('');
@@ -38,7 +37,6 @@
           const [onlinePrices, setOnlinePrices] = useState({});
           const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
           const [isLoading, setIsLoading] = useState(false);
-
           // Form fattura
           const [invoiceDate, setInvoiceDate] = useState('');
           const [invoiceNumber, setInvoiceNumber] = useState('');
@@ -48,14 +46,11 @@
             { product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }
           ]);
           const [editingInvoice, setEditingInvoice] = useState(null);
-
           // Form nota credito
           const [creditYear, setCreditYear] = useState(new Date().getFullYear().toString());
           const [creditAmount, setCreditAmount] = useState('');
-
           // Timer per prezzi online
           const priceTimerRef = useRef(null);
-
           useEffect(() => {
             const stored = localStorage.getItem('fidiaAppPassword');
             if (stored) {
@@ -64,7 +59,6 @@
               loadFromGoogleSheets(stored);
             }
           }, []);
-
           const loadFromGoogleSheets = async (pwd = savedPassword) => {
             if (!pwd) return;
             setIsLoading(true);
@@ -72,13 +66,11 @@
               const response = await fetch(SCRIPT_URL + '?password=' + encodeURIComponent(pwd));
               if (!response.ok) throw new Error('Errore server');
               const data = await response.json();
-
               if (data.success === false || data.error === "Password errata") {
                 alert('Password errata. Reinseriscila.');
                 handleLogout();
                 return;
               }
-
               const invoiceMap = {};
               data.invoices.forEach(row => {
                 if (!invoiceMap[row.id]) {
@@ -102,7 +94,6 @@
                   shippingCost: row.shippingCost || 0
                 });
               });
-
               setInvoices(Object.values(invoiceMap));
               setCreditNotes(data.creditNotes || []);
               setOnlinePrices(data.onlinePrices || {});
@@ -113,7 +104,6 @@
             }
             setIsLoading(false);
           };
-
           const saveToGoogleSheets = async (action, payload) => {
             if (!savedPassword) return false;
             setIsLoading(true);
@@ -133,7 +123,6 @@
               return false;
             }
           };
-
           const handleLogin = () => {
             if (!password) return alert('Inserisci la password!');
             localStorage.setItem('fidiaAppPassword', password);
@@ -141,7 +130,6 @@
             setIsAuthenticated(true);
             loadFromGoogleSheets(password);
           };
-
           const handleLogout = () => {
             localStorage.removeItem('fidiaAppPassword');
             setSavedPassword('');
@@ -151,7 +139,6 @@
             setCreditNotes([]);
             setOnlinePrices({});
           };
-
           const addInvoiceItem = () => setInvoiceItems([...invoiceItems, { product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }]);
           const removeInvoiceItem = index => setInvoiceItems(invoiceItems.filter((_, i) => i !== index));
           const updateInvoiceItem = (index, field, value) => {
@@ -159,7 +146,6 @@
             updated[index][field] = value;
             setInvoiceItems(updated);
           };
-
           const resetForm = () => {
             setEditingInvoice(null);
             setInvoiceDate('');
@@ -168,11 +154,9 @@
             setInvoiceYear(new Date().getFullYear().toString());
             setInvoiceItems([{ product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }]);
           };
-
           const saveInvoice = async () => {
             const validItems = invoiceItems.filter(i => i.product && i.quantity && i.price);
             if (!invoiceDate || !invoiceNumber || validItems.length === 0) return alert('Compila tutti i campi obbligatori!');
-
             const shipping = parseFloat(shippingCost) || 0;
             const newInvoice = {
               id: Date.now(),
@@ -190,18 +174,15 @@
                 freebies: parseFloat(item.freebies) || 0
               }))
             };
-
             const success = await saveToGoogleSheets('saveInvoice', newInvoice);
             if (success) {
               resetForm();
               alert('Fattura salvata con successo!');
             }
           };
-
           const updateInvoice = async () => {
             const validItems = invoiceItems.filter(i => i.product && i.quantity && i.price);
             if (!invoiceDate || !invoiceNumber || validItems.length === 0) return alert('Compila tutti i campi obbligatori!');
-
             const shipping = parseFloat(shippingCost) || 0;
             const updatedInvoice = {
               id: editingInvoice.id,
@@ -219,19 +200,16 @@
                 freebies: parseFloat(item.freebies) || 0
               }))
             };
-
             const success = await saveToGoogleSheets('updateInvoice', updatedInvoice);
             if (success) {
               resetForm();
               alert('Fattura aggiornata con successo!');
             }
           };
-
           const deleteInvoice = async (id) => {
             if (!confirm('Eliminare definitivamente questa fattura?')) return;
             await saveToGoogleSheets('deleteInvoice', { id });
           };
-
           const startEditInvoice = (invoice) => {
             setEditingInvoice(invoice);
             setInvoiceYear(invoice.year);
@@ -248,7 +226,6 @@
             })));
             window.scrollTo({ top: 0, behavior: 'smooth' });
           };
-
           const saveCreditNote = async () => {
             if (!creditAmount || parseFloat(creditAmount) <= 0) return alert('Inserisci un importo valido');
             const newNote = {
@@ -262,16 +239,13 @@
               alert('Nota di credito salvata!');
             }
           };
-
           const deleteCreditNote = async (id) => {
             if (!confirm('Eliminare questa nota di credito?')) return;
             await saveToGoogleSheets('deleteCreditNote', { id });
           };
-
           const handlePriceChange = (product, value) => {
             const newPrices = { ...onlinePrices, [product]: parseFloat(value) || 0 };
             setOnlinePrices(newPrices);
-
             if (priceTimerRef.current) clearTimeout(priceTimerRef.current);
             priceTimerRef.current = setTimeout(() => {
               if (value !== '') {
@@ -279,7 +253,6 @@
               }
             }, 2000);
           };
-
           const exportDashboardImage = async () => {
             const el = document.getElementById('dashboard-table');
             if (!el) return alert('Errore: tabella non trovata');
@@ -293,7 +266,6 @@
               alert('Errore esportazione immagine');
             }
           };
-
           // Analisi ottimizzata con useMemo
           const analysis = useMemo(() => {
             const result = {};
@@ -302,40 +274,31 @@
               let totalQuantity = 0;
               let yearCost = {};
               let yearQuantity = {};
-
               const filteredInvoices = selectedYear === 'all'
                 ? invoices
                 : invoices.filter(inv => String(inv.year) === selectedYear);
-
               filteredInvoices.forEach(invoice => {
                 const totalPieces = invoice.items.reduce((sum, i) => sum + (parseFloat(i.quantity) || 0) + (parseFloat(i.freebies) || 0), 0);
                 const shipping = parseFloat(invoice.shippingCost) || 0;
-
                 invoice.items.forEach(item => {
                   if (item.product !== product) return;
-
                   const qty = parseFloat(item.quantity) || 0;
                   const free = parseFloat(item.freebies) || 0;
                   const netPrice = parseFloat(item.priceNet || item.price) || 0;
                   const vat = parseFloat(item.vat) || 0;
                   const totalQty = qty + free;
-
                   const shippingShare = totalPieces > 0 ? (totalQty / totalPieces) * shipping : 0;
-
                   const priceWithVAT = qty * netPrice * (1 + vat / 100);
                   const shippingWithVAT = shippingShare * 1.22;
                   const itemCost = priceWithVAT + shippingWithVAT;
-
                   totalCost += itemCost;
                   totalQuantity += totalQty;
-
                   if (!yearCost[invoice.year]) yearCost[invoice.year] = 0;
                   if (!yearQuantity[invoice.year]) yearQuantity[invoice.year] = 0;
                   yearCost[invoice.year] += itemCost;
                   yearQuantity[invoice.year] += totalQty;
                 });
               });
-
               // Note di credito proporzionali
               const relevantCredits = selectedYear === 'all' ? creditNotes : creditNotes.filter(c => c.year === selectedYear);
               const totalAllYearsCost = Object.values(yearCost).reduce((a, b) => a + b, 0);
@@ -345,17 +308,14 @@
                   yearCost[c.year] -= c.amount * prop;
                 }
               });
-
               const finalCost = Object.values(yearCost).reduce((a, b) => a + b, 0);
               const avgCost = totalQuantity > 0 ? finalCost / totalQuantity : 0;
               const online = onlinePrices[product] || 0;
               const margin = online > 0 ? ((online - avgCost) / online) * 100 : 0;
-
               result[product] = { avgRealCost: avgCost, onlinePrice: online, margin, totalQuantity };
             });
             return result;
           }, [invoices, creditNotes, onlinePrices, selectedYear]);
-
           if (!isAuthenticated) {
             return (
               <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -383,7 +343,6 @@
               </div>
             );
           }
-
           return (
             <div className="min-h-screen bg-gray-50">
               {isLoading && (
@@ -394,7 +353,6 @@
                   </div>
                 </div>
               )}
-
               <div className="bg-white shadow">
                 <div className="max-w-7xl mx-auto px-4 py-4">
                   <div className="flex justify-between items-center">
@@ -424,7 +382,6 @@
                   </div>
                 </div>
               </div>
-
               <div className="max-w-7xl mx-auto px-4 py-8">
                 {/* DASHBOARD */}
                 {activeTab === 'dashboard' && (
@@ -442,7 +399,6 @@
                           </button>
                         </div>
                       </div>
-
                       <div id="dashboard-table" className="overflow-x-auto">
                         {/* Statistiche omaggi */}
                         {(() => {
@@ -481,7 +437,6 @@
                             </div>
                           );
                         })()}
-
                         <table className="w-full text-sm">
                           <thead className="bg-gray-100">
                             <tr>
@@ -511,7 +466,6 @@
                                   </td>
                                 </tr>
                               ))}
-
                             {(() => {
                               const activeProducts = Object.entries(analysis).filter(([, d]) => d.totalQuantity > 0);
                               const revenue = activeProducts.reduce((s, [, d]) => s + d.onlinePrice * d.totalQuantity, 0);
@@ -551,7 +505,6 @@
                     </div>
                   </div>
                 )}
-
                 {/* FATTURE */}
                 {activeTab === 'invoices' && (
                   <div className="space-y-8">
@@ -579,13 +532,11 @@
                           <input type="number" step="0.01" value={shippingCost} onChange={e => setShippingCost(e.target.value)} placeholder="0.00" className="w-full px-4 py-2 border rounded-lg" />
                         </div>
                       </div>
-
                       {shippingCost && parseFloat(shippingCost) > 0 && (
                         <div className="mb-6 p-4 bg-blue-50 border border-blue-300 rounded-lg text-blue-800">
                           ℹ️ Le spese di spedizione (€{parseFloat(shippingCost).toFixed(2)}) saranno ripartite proporzionalmente al numero di pezzi (IVA 22%).
                         </div>
                       )}
-
                       <div className="overflow-x-auto mb-6">
                         <table className="w-full">
                           <thead className="bg-gray-100">
@@ -624,7 +575,6 @@
                           </tbody>
                         </table>
                       </div>
-
                       <div className="flex gap-3">
                         <button onClick={addInvoiceItem} className="px-5 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">➕ Aggiungi riga</button>
                         {editingInvoice ? (
@@ -637,7 +587,6 @@
                         )}
                       </div>
                     </div>
-
                     <div className="bg-white rounded-lg shadow p-6">
                       <h2 className="text-2xl font-bold mb-4">Fatture inserite ({invoices.length})</h2>
                       <div className="space-y-3">
@@ -662,7 +611,6 @@
                     </div>
                   </div>
                 )}
-
                 {/* NOTE DI CREDITO */}
                 {activeTab === 'credits' && (
                   <div className="space-y-8">
@@ -684,7 +632,6 @@
                         💾 Salva Nota di Credito
                       </button>
                     </div>
-
                     <div className="bg-white rounded-lg shadow p-6">
                       <h2 className="text-2xl font-bold mb-4">Note di Credito Inserite ({creditNotes.length})</h2>
                       <div className="space-y-3">
@@ -698,7 +645,6 @@
                     </div>
                   </div>
                 )}
-
                 {/* PREZZI ONLINE */}
                 {activeTab === 'prices' && (
                   <div className="bg-white rounded-lg shadow p-6">
@@ -727,7 +673,6 @@
             </div>
           );
         }
-
         ReactDOM.render(<App />, document.getElementById('root'));
     </script>
 </body>
