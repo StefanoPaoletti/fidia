@@ -12,10 +12,10 @@
 </head>
 <body>
     <div id="root"></div>
-    
+ 
     <script type="text/babel">
-        const { useState, useEffect } = React;
-        
+        const { useState, useEffect, useMemo, useRef } = React;
+     
         const PRODUCTS = [
           'PROLENS', 'OPTO RED', 'OPTO SOL', 'OPTO YAL', 'OPTO YAL CREAM', 'OPTO GEL', 'OPTO IDRO',
           'OPTO RELAX', 'OPTO VITREO', 'RESPILENS 100', 'RESPILENS 360', 'OPTO CARE', 'OPTO MYO',
@@ -23,12 +23,9 @@
           'VITREOXIGEN', 'LUTEINOMEGA', 'MERAMIRT', 'MYRIALEN GEL',
           'MERAMIRT CM', 'MERAMIRT XG', 'LACRISEK'
         ];
-
         const YEARS = ['2019', '2020', '2021', '2022', '2023', '2024', '2025', '2026'];
-
         const SHEET_ID = '1FvExAXdbcPeA3vowfpVm1D4IO68GYF4s5GpzesvAJu8';
         const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyX5dwnxE0LeYXgpBTvOZ5l6RR63JLw5qSQQBAcREdrw2DFc6fz9RZELn_noz1qxq2v/exec';
-
         function App() {
           const [isAuthenticated, setIsAuthenticated] = useState(false);
           const [password, setPassword] = useState('');
@@ -40,7 +37,7 @@
           const [onlinePrices, setOnlinePrices] = useState({});
           const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
           const [isLoading, setIsLoading] = useState(false);
-
+          // Form fattura
           const [invoiceDate, setInvoiceDate] = useState('');
           const [invoiceNumber, setInvoiceNumber] = useState('');
           const [invoiceYear, setInvoiceYear] = useState(new Date().getFullYear().toString());
@@ -48,12 +45,12 @@
           const [invoiceItems, setInvoiceItems] = useState([
             { product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }
           ]);
-
+          const [editingInvoice, setEditingInvoice] = useState(null);
+          // Form nota credito
           const [creditYear, setCreditYear] = useState(new Date().getFullYear().toString());
           const [creditAmount, setCreditAmount] = useState('');
-          
-          const [editingInvoice, setEditingInvoice] = useState(null);
-
+          // Timer per prezzi online
+          const priceTimerRef = useRef(null);
           useEffect(() => {
             const stored = localStorage.getItem('fidiaAppPassword');
             if (stored) {
@@ -62,33 +59,18 @@
               loadFromGoogleSheets(stored);
             }
           }, []);
-
           const loadFromGoogleSheets = async (pwd = savedPassword) => {
             if (!pwd) return;
             setIsLoading(true);
             try {
-              const response = await fetch(SCRIPT_URL + '?password=' + encodeURIComponent(pwd), {
-                method: 'GET',
-                cache: 'no-cache'
-              });
-              if (!response.ok) {
-                throw new Error('Errore server: ' + response.status);
-              }
-              const text = await response.text();
-              let data;
-              try {
-                data = JSON.parse(text);
-              } catch (parseError) {
-                console.error('JSON non valido:', text);
-                throw new Error('Risposta non valida dal server');
-              }
-              
+              const response = await fetch(SCRIPT_URL + '?password=' + encodeURIComponent(pwd));
+              if (!response.ok) throw new Error('Errore server');
+              const data = await response.json();
               if (data.success === false || data.error === "Password errata") {
                 alert('Password errata. Reinseriscila.');
                 handleLogout();
                 return;
               }
-              
               const invoiceMap = {};
               data.invoices.forEach(row => {
                 if (!invoiceMap[row.id]) {
@@ -112,56 +94,42 @@
                   shippingCost: row.shippingCost || 0
                 });
               });
-              
               setInvoices(Object.values(invoiceMap));
-              setCreditNotes(data.creditNotes);
-              setOnlinePrices(data.onlinePrices);
+              setCreditNotes(data.creditNotes || []);
+              setOnlinePrices(data.onlinePrices || {});
             } catch (error) {
-              console.error('Errore caricamento:', error);
-              alert('Errore di connessione o password errata. Fai logout e riprova.');
+              console.error(error);
+              alert('Errore di connessione o password errata.');
               handleLogout();
             }
             setIsLoading(false);
           };
-
-          const saveToGoogleSheets = async (action, data) => {
+          const saveToGoogleSheets = async (action, payload) => {
             if (!savedPassword) return false;
             setIsLoading(true);
             try {
-              const response = await fetch(SCRIPT_URL, {
+              await fetch(SCRIPT_URL, {
                 method: 'POST',
-                body: JSON.stringify({ 
-                  password: savedPassword,
-                  action, 
-                  ...data 
-                }),
+                body: JSON.stringify({ password: savedPassword, action, ...payload }),
                 mode: 'no-cors'
               });
-              
-              setTimeout(async () => {
-                await loadFromGoogleSheets();
-              }, 1000);
-              
+              await new Promise(r => setTimeout(r, 1200));
+              await loadFromGoogleSheets();
               return true;
             } catch (error) {
-              console.error('Errore nel salvataggio:', error);
-              alert('Errore nel salvataggio su Google Sheets: ' + error.message);
+              console.error(error);
+              alert('Errore salvataggio: ' + error.message);
               setIsLoading(false);
               return false;
             }
           };
-
           const handleLogin = () => {
-            if (!password) {
-              alert('Inserisci la password!');
-              return;
-            }
+            if (!password) return alert('Inserisci la password!');
             localStorage.setItem('fidiaAppPassword', password);
             setSavedPassword(password);
             setIsAuthenticated(true);
             loadFromGoogleSheets(password);
           };
-
           const handleLogout = () => {
             localStorage.removeItem('fidiaAppPassword');
             setSavedPassword('');
@@ -171,97 +139,77 @@
             setCreditNotes([]);
             setOnlinePrices({});
           };
-
-          const addInvoiceItem = () => {
-            setInvoiceItems([...invoiceItems, { product: '', quantity: '', price: '', vat: '10', freebies: '' }]);
-          };
-
-          const removeInvoiceItem = (index) => {
-            setInvoiceItems(invoiceItems.filter((_, i) => i !== index));
-          };
-
+          const addInvoiceItem = () => setInvoiceItems([...invoiceItems, { product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }]);
+          const removeInvoiceItem = index => setInvoiceItems(invoiceItems.filter((_, i) => i !== index));
           const updateInvoiceItem = (index, field, value) => {
             const updated = [...invoiceItems];
             updated[index][field] = value;
             setInvoiceItems(updated);
           };
-
+          const resetForm = () => {
+            setEditingInvoice(null);
+            setInvoiceDate('');
+            setInvoiceNumber('');
+            setShippingCost('');
+            setInvoiceYear(new Date().getFullYear().toString());
+            setInvoiceItems([{ product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }]);
+          };
           const saveInvoice = async () => {
-            const validItems = invoiceItems.filter(item => 
-              item.product && 
-              item.quantity && 
-              !isNaN(parseFloat(item.quantity)) &&
-              item.price && 
-              !isNaN(parseFloat(item.price))
-            );
-            
-            if (!invoiceDate || !invoiceNumber || validItems.length === 0) {
-              alert('Compila tutti i campi obbligatori! Assicurati che quantità e prezzo siano numeri validi.');
-              return;
-            }
-
+            const validItems = invoiceItems.filter(i => i.product && i.quantity && i.price);
+            if (!invoiceDate || !invoiceNumber || validItems.length === 0) return alert('Compila tutti i campi obbligatori!');
             const shipping = parseFloat(shippingCost) || 0;
-
             const newInvoice = {
               id: Date.now(),
               date: invoiceDate,
               number: invoiceNumber,
               year: invoiceYear,
               shippingCost: shipping,
-              items: validItems.map(item => {
-                const grossPrice = parseFloat(item.price);
-                const discount = parseFloat(item.discount) || 0;
-                const netPrice = grossPrice * (1 - discount / 100);
-                
-                return {
-                  product: item.product,
-                  quantity: parseFloat(item.quantity),
-                  priceGross: grossPrice,    // Prezzo LORDO (prima dello sconto)
-                  priceNet: netPrice,        // Prezzo NETTO (dopo sconto)
-                  discount: discount,
-                  vat: item.vat || '10',
-                  freebies: parseFloat(item.freebies) || 0
-                };
-              })
+              items: validItems.map(item => ({
+                product: item.product,
+                quantity: parseFloat(item.quantity),
+                priceGross: parseFloat(item.price),
+                priceNet: parseFloat(item.price) * (1 - (parseFloat(item.discount) || 0) / 100),
+                discount: parseFloat(item.discount) || 0,
+                vat: item.vat || '10',
+                freebies: parseFloat(item.freebies) || 0
+              }))
             };
-
             const success = await saveToGoogleSheets('saveInvoice', newInvoice);
-            
             if (success) {
-              setInvoiceDate('');
-              setInvoiceNumber('');
-              setShippingCost('');
-              setInvoiceItems([{ product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }]);
-              alert('Fattura salvata su Google Sheets!');
+              resetForm();
+              alert('Fattura salvata con successo!');
             }
           };
-
-          const saveCreditNote = async () => {
-            if (!creditAmount) {
-              alert('Inserisci l\'importo!');
-              return;
-            }
-
-            const newNote = {
-              id: Date.now(),
-              year: creditYear,
-              amount: parseFloat(creditAmount)
+          const updateInvoice = async () => {
+            const validItems = invoiceItems.filter(i => i.product && i.quantity && i.price);
+            if (!invoiceDate || !invoiceNumber || validItems.length === 0) return alert('Compila tutti i campi obbligatori!');
+            const shipping = parseFloat(shippingCost) || 0;
+            const updatedInvoice = {
+              id: editingInvoice.id,
+              date: invoiceDate,
+              number: invoiceNumber,
+              year: invoiceYear,
+              shippingCost: shipping,
+              items: validItems.map(item => ({
+                product: item.product,
+                quantity: parseFloat(item.quantity),
+                priceGross: parseFloat(item.price),
+                priceNet: parseFloat(item.price) * (1 - (parseFloat(item.discount) || 0) / 100),
+                discount: parseFloat(item.discount) || 0,
+                vat: item.vat || '10',
+                freebies: parseFloat(item.freebies) || 0
+              }))
             };
-
-            const success = await saveToGoogleSheets('saveCreditNote', newNote);
-            
+            const success = await saveToGoogleSheets('updateInvoice', updatedInvoice);
             if (success) {
-              setCreditAmount('');
-              alert('Nota di credito salvata su Google Sheets!');
+              resetForm();
+              alert('Fattura aggiornata con successo!');
             }
           };
-
           const deleteInvoice = async (id) => {
-            if (confirm('Sei sicuro di voler eliminare questa fattura?')) {
-              await saveToGoogleSheets('deleteInvoice', { id });
-            }
+            if (!confirm('Eliminare definitivamente questa fattura?')) return;
+            await saveToGoogleSheets('deleteInvoice', { id });
           };
-          
           const startEditInvoice = (invoice) => {
             setEditingInvoice(invoice);
             setInvoiceYear(invoice.year);
@@ -269,212 +217,105 @@
             setInvoiceNumber(invoice.number);
             setShippingCost(invoice.shippingCost || '');
             setInvoiceItems(invoice.items.map(item => ({
-              product: item.product || '',
-              quantity: item.quantity || '',
-              price: item.price || '',
+              product: item.product,
+              quantity: item.quantity,
+              price: item.price,
               discount: item.discount || '',
               vat: item.vat || '10',
               freebies: item.freebies || ''
             })));
             window.scrollTo({ top: 0, behavior: 'smooth' });
           };
-          
-          const cancelEdit = () => {
-            setEditingInvoice(null);
-            setInvoiceDate('');
-            setInvoiceNumber('');
-            setInvoiceYear('2025');
-            setShippingCost('');
-            setInvoiceItems([{ product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }]);
-          };
-          
-          const updateInvoice = async () => {
-            const validItems = invoiceItems.filter(item => 
-              item.product && 
-              item.quantity && 
-              !isNaN(parseFloat(item.quantity)) &&
-              item.price && 
-              !isNaN(parseFloat(item.price))
-            );
-            
-            if (!invoiceDate || !invoiceNumber || validItems.length === 0) {
-              alert('Compila tutti i campi obbligatori! Assicurati che quantità e prezzo siano numeri validi.');
-              return;
-            }
-            
-            const shipping = parseFloat(shippingCost) || 0;
-            
-            // Prima elimina la vecchia fattura
-            await saveToGoogleSheets('deleteInvoice', { id: editingInvoice.id });
-            
-            // Poi salva quella nuova con lo stesso ID
-            const updatedInvoice = {
-              id: editingInvoice.id,
-              date: invoiceDate,
-              number: invoiceNumber,
-              year: invoiceYear,
-              shippingCost: shipping,
-              items: validItems.map(item => {
-                const grossPrice = parseFloat(item.price);
-                const discount = parseFloat(item.discount) || 0;
-                const netPrice = grossPrice * (1 - discount / 100);
-                
-                return {
-                  product: item.product,
-                  quantity: parseFloat(item.quantity),
-                  priceGross: grossPrice,    // Prezzo LORDO (prima dello sconto)
-                  priceNet: netPrice,        // Prezzo NETTO (dopo sconto)
-                  discount: discount,
-                  vat: item.vat || '10',
-                  freebies: parseFloat(item.freebies) || 0
-                };
-              })
+          const saveCreditNote = async () => {
+            if (!creditAmount || parseFloat(creditAmount) <= 0) return alert('Inserisci un importo valido');
+            const newNote = {
+              id: Date.now(),
+              year: creditYear,
+              amount: parseFloat(creditAmount)
             };
-            
-            const success = await saveToGoogleSheets('saveInvoice', updatedInvoice);
-            
+            const success = await saveToGoogleSheets('saveCreditNote', newNote);
             if (success) {
-              cancelEdit();
-              alert('Fattura aggiornata!');
+              setCreditAmount('');
+              alert('Nota di credito salvata!');
             }
           };
-
           const deleteCreditNote = async (id) => {
-            if (confirm('Sei sicuro di voler eliminare questa nota di credito?')) {
-              await saveToGoogleSheets('deleteCreditNote', { id });
-            }
+            if (!confirm('Eliminare questa nota di credito?')) return;
+            await saveToGoogleSheets('deleteCreditNote', { id });
           };
-
-          const updateOnlinePrice = async (product, price) => {
-            if (price && !isNaN(price)) {
-              await saveToGoogleSheets('saveOnlinePrice', { product, price: parseFloat(price) });
-            }
+          const handlePriceChange = (product, value) => {
+            const newPrices = { ...onlinePrices, [product]: parseFloat(value) || 0 };
+            setOnlinePrices(newPrices);
+            if (priceTimerRef.current) clearTimeout(priceTimerRef.current);
+            priceTimerRef.current = setTimeout(() => {
+              if (value !== '') {
+                saveToGoogleSheets('saveOnlinePrice', { product, price: parseFloat(value) || 0 });
+              }
+            }, 2000);
           };
-          
           const exportDashboardImage = async () => {
-            const dashboardElement = document.getElementById('dashboard-table');
-            if (!dashboardElement) {
-              alert('Errore: tabella non trovata');
-              return;
-            }
-            
+            const el = document.getElementById('dashboard-table');
+            if (!el) return alert('Errore: tabella non trovata');
             try {
-              const canvas = await html2canvas(dashboardElement, {
-                backgroundColor: '#ffffff',
-                scale: 2, // Alta qualità
-                logging: false
-              });
-              
+              const canvas = await html2canvas(el, { backgroundColor: '#ffffff', scale: 2 });
               const link = document.createElement('a');
               link.download = `analisi-margini-${selectedYear}-${new Date().toISOString().split('T')[0]}.png`;
               link.href = canvas.toDataURL('image/png');
               link.click();
-            } catch (error) {
-              console.error('Errore nell\'esportazione:', error);
-              alert('Errore nell\'esportazione dell\'immagine');
+            } catch (err) {
+              alert('Errore esportazione immagine');
             }
           };
-
-          const calculateProductAnalysis = (filterYear = null) => {
-            const analysis = {};
-
+          // Analisi ottimizzata con useMemo
+          const analysis = useMemo(() => {
+            const result = {};
             PRODUCTS.forEach(product => {
               let totalCost = 0;
               let totalQuantity = 0;
               let yearCost = {};
               let yearQuantity = {};
-
-              // Filtra le fatture per anno se specificato
-              const filteredInvoices = filterYear && filterYear !== 'all' 
-                ? invoices.filter(inv => String(inv.year) === String(filterYear))
-                : invoices;
-
+              const filteredInvoices = selectedYear === 'all'
+                ? invoices
+                : invoices.filter(inv => String(inv.year) === selectedYear);
               filteredInvoices.forEach(invoice => {
-                // Calcola il numero TOTALE di pezzi nella fattura (per ripartire le spese di spedizione)
-                const totalInvoicePieces = invoice.items.reduce((sum, item) => {
-                  const qty = parseFloat(item.quantity) || 0;
-                  const freebies = parseFloat(item.freebies) || 0;
-                  return sum + qty + freebies;
-                }, 0);
-                const shippingCost = parseFloat(invoice.shippingCost) || 0;
-                
+                const totalPieces = invoice.items.reduce((sum, i) => sum + (parseFloat(i.quantity) || 0) + (parseFloat(i.freebies) || 0), 0);
+                const shipping = parseFloat(invoice.shippingCost) || 0;
                 invoice.items.forEach(item => {
-                  if (item.product === product) {
-                    const qty = parseFloat(item.quantity) || 0;
-                    const freebies = parseFloat(item.freebies) || 0;
-                    const netPrice = parseFloat(item.priceNet || item.price) || 0; // Uso priceNet se esiste, altrimenti price (per fatture vecchie)
-                    const vat = parseFloat(item.vat) || 0;
-                    const totalQty = qty + freebies;
-                    
-                    // Calcola la quota di spese di spedizione per questo prodotto
-                    // Ripartizione in base al numero di pezzi (semplice ed equa)
-                    const shippingShare = totalInvoicePieces > 0 ? (totalQty / totalInvoicePieces) * shippingCost : 0;
-                    
-                    // Calcolo costo CORRETTO:
-                    // 1. Prezzo netto con IVA del prodotto
-                    const priceWithVAT = (qty * netPrice) * (1 + vat / 100);
-                    
-                    // 2. Quota spedizione con IVA 22% (SEMPRE)
-                    const shippingWithVAT = shippingShare * 1.22;
-                    
-                    // 3. Costo totale
-                    const totalItemCost = priceWithVAT + shippingWithVAT;
-                    
-                    totalCost += totalItemCost;
-                    totalQuantity += totalQty;
-
-                    if (!yearCost[invoice.year]) {
-                      yearCost[invoice.year] = 0;
-                      yearQuantity[invoice.year] = 0;
-                    }
-                    yearCost[invoice.year] += totalItemCost;
-                    yearQuantity[invoice.year] += totalQty;
-                  }
+                  if (item.product !== product) return;
+                  const qty = parseFloat(item.quantity) || 0;
+                  const free = parseFloat(item.freebies) || 0;
+                  const netPrice = parseFloat(item.priceNet || item.price) || 0;
+                  const vat = parseFloat(item.vat) || 0;
+                  const totalQty = qty + free;
+                  const shippingShare = totalPieces > 0 ? (totalQty / totalPieces) * shipping : 0;
+                  const priceWithVAT = qty * netPrice * (1 + vat / 100);
+                  const shippingWithVAT = shippingShare * 1.22;
+                  const itemCost = priceWithVAT + shippingWithVAT;
+                  totalCost += itemCost;
+                  totalQuantity += totalQty;
+                  if (!yearCost[invoice.year]) yearCost[invoice.year] = 0;
+                  if (!yearQuantity[invoice.year]) yearQuantity[invoice.year] = 0;
+                  yearCost[invoice.year] += itemCost;
+                  yearQuantity[invoice.year] += totalQty;
                 });
               });
-
-              Object.keys(yearCost).forEach(year => {
-                // Applica note di credito solo degli anni considerati
-                const relevantCreditNotes = filterYear && filterYear !== 'all'
-                  ? creditNotes.filter(cn => cn.year === filterYear)
-                  : creditNotes;
-                
-                const yearCredit = relevantCreditNotes
-                  .filter(cn => cn.year === year)
-                  .reduce((sum, cn) => sum + cn.amount, 0);
-
-                // FIX: calcola yearTotal solo sugli anni effettivamente considerati
-                const yearTotal = filterYear && filterYear !== 'all' 
-                  ? yearCost[year]  // solo l'anno filtrato
-                  : Object.values(yearCost).reduce((sum, cost) => sum + cost, 0);  // tutti gli anni
-                
-                if (yearTotal > 0) {
-                  const proportion = yearCost[year] / yearTotal;
-                  yearCost[year] -= yearCredit * proportion;
+              // Note di credito proporzionali
+              const relevantCredits = selectedYear === 'all' ? creditNotes : creditNotes.filter(c => c.year === selectedYear);
+              const totalAllYearsCost = Object.values(yearCost).reduce((a, b) => a + b, 0);
+              relevantCredits.forEach(c => {
+                if (yearCost[c.year] && totalAllYearsCost > 0) {
+                  const prop = yearCost[c.year] / totalAllYearsCost;
+                  yearCost[c.year] -= c.amount * prop;
                 }
               });
-
-              const totalCostWithCredits = Object.values(yearCost).reduce((sum, cost) => sum + cost, 0);
-              const avgRealCost = totalQuantity > 0 ? totalCostWithCredits / totalQuantity : 0;
-              const onlinePrice = onlinePrices[product] || 0;
-              const margin = onlinePrice > 0 ? ((onlinePrice - avgRealCost) / onlinePrice * 100) : 0;
-
-              analysis[product] = {
-                avgRealCost,
-                onlinePrice,
-                margin,
-                totalQuantity,
-                yearData: Object.keys(yearCost).map(year => ({
-                  year,
-                  cost: yearQuantity[year] > 0 ? yearCost[year] / yearQuantity[year] : 0,
-                  quantity: yearQuantity[year]
-                }))
-              };
+              const finalCost = Object.values(yearCost).reduce((a, b) => a + b, 0);
+              const avgCost = totalQuantity > 0 ? finalCost / totalQuantity : 0;
+              const online = onlinePrices[product] || 0;
+              const margin = online > 0 ? ((online - avgCost) / online) * 100 : 0;
+              result[product] = { avgRealCost: avgCost, onlinePrice: online, margin, totalQuantity };
             });
-
-            return analysis;
-          };
-
+            return result;
+          }, [invoices, creditNotes, onlinePrices, selectedYear]);
           if (!isAuthenticated) {
             return (
               <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -485,22 +326,16 @@
                       <input
                         type={showPassword ? 'text' : 'password'}
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                        onChange={e => setPassword(e.target.value)}
+                        onKeyPress={e => e.key === 'Enter' && handleLogin()}
                         placeholder="Inserisci password"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                       />
-                      <button
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-3 text-gray-500 hover:text-gray-700"
-                      >
+                      <button onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-600">
                         {showPassword ? '👁️' : '👁️‍🗨️'}
                       </button>
                     </div>
-                    <button
-                      onClick={handleLogin}
-                      className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
-                    >
+                    <button onClick={handleLogin} className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700">
                       Accedi
                     </button>
                   </div>
@@ -508,162 +343,114 @@
               </div>
             );
           }
-
-          const analysis = calculateProductAnalysis(selectedYear);
-          
           return (
             <div className="min-h-screen bg-gray-50">
               {isLoading && (
-                <div className="fixed top-0 left-0 right-0 bg-blue-600 text-white py-2 text-center z-50">
-                  🔄 Sincronizzazione con Google Sheets...
+                <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+                  <div className="bg-white rounded-lg p-8 flex items-center gap-4 shadow-2xl">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600"></div>
+                    <span className="text-xl font-medium">Sincronizzazione con Google Sheets...</span>
+                  </div>
                 </div>
               )}
-              
               <div className="bg-white shadow">
                 <div className="max-w-7xl mx-auto px-4 py-4">
                   <div className="flex justify-between items-center">
                     <h1 className="text-2xl font-bold text-gray-800">Analisi Prezzi Fidia</h1>
-                    <div className="flex gap-2 items-center">
-                      <button 
-                        onClick={loadFromGoogleSheets} 
-                        className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                        disabled={isLoading}
-                      >
+                    <div className="flex gap-3 items-center">
+                      <button onClick={loadFromGoogleSheets} disabled={isLoading} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
                         🔄 Ricarica
                       </button>
-                      <a 
-                        href={`https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`}
-                        target="_blank"
-                        className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-                      >
-                        Apri Google Sheets
+                      <a href={`https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`} target="_blank" className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                        Apri Sheets
                       </a>
-                      <button
-                        onClick={handleLogout}
-                        className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-                      >
+                      <button onClick={handleLogout} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
                         Logout
                       </button>
                     </div>
                   </div>
-                  <div className="flex gap-4 mt-4">
-                    <button
-                      onClick={() => setActiveTab('dashboard')}
-                      className={`px-4 py-2 rounded ${activeTab === 'dashboard' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-                    >
-                      Dashboard
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('invoices')}
-                      className={`px-4 py-2 rounded ${activeTab === 'invoices' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-                    >
-                      Fatture
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('credits')}
-                      className={`px-4 py-2 rounded ${activeTab === 'credits' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-                    >
-                      Note Credito
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('prices')}
-                      className={`px-4 py-2 rounded ${activeTab === 'prices' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-                    >
-                      Prezzi Online
-                    </button>
+                  <div className="flex gap-4 mt-6 overflow-x-auto pb-2">
+                    {['dashboard', 'invoices', 'credits', 'prices'].map(tab => (
+                      <button
+                        key={tab}
+                        onClick={() => setActiveTab(tab)}
+                        className={`px-6 py-2 rounded font-medium whitespace-nowrap ${activeTab === tab ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                      >
+                        {tab === 'dashboard' ? 'Dashboard' : tab === 'invoices' ? 'Fatture' : tab === 'credits' ? 'Note Credito' : 'Prezzi Online'}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
-
-              <div className="max-w-7xl mx-auto px-4 py-6">
+              <div className="max-w-7xl mx-auto px-4 py-8">
+                {/* DASHBOARD */}
                 {activeTab === 'dashboard' && (
-                  <div className="space-y-6">
+                  <div className="space-y-8">
                     <div className="bg-white rounded-lg shadow p-6">
-                      <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-xl font-bold">Analisi Margini</h2>
-                        <div className="flex gap-2 items-center">
-                          <select
-                            value={selectedYear}
-                            onChange={(e) => setSelectedYear(e.target.value)}
-                            className="px-4 py-2 border rounded"
-                          >
+                      <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold">Analisi Margini</h2>
+                        <div className="flex gap-4 items-center">
+                          <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} className="px-4 py-2 border rounded-lg">
                             <option value="all">Tutti gli anni</option>
-                            {YEARS.map(year => <option key={year} value={year}>{year}</option>)}
+                            {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
                           </select>
-                          <button
-                            onClick={exportDashboardImage}
-                            className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center gap-2"
-                          >
-                            Esporta Immagine
+                          <button onClick={exportDashboardImage} className="px-5 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2">
+                            📸 Esporta Immagine
                           </button>
                         </div>
                       </div>
-                      
                       <div id="dashboard-table" className="overflow-x-auto">
+                        {/* Statistiche omaggi */}
                         {(() => {
-                          // Calcolo statistiche omaggi
-                          const filteredInvoices = selectedYear === 'all' 
-                            ? invoices 
-                            : invoices.filter(inv => String(inv.year) === String(selectedYear));
-                          
-                          let totalFreebies = 0;
-                          let totalFreebiesValue = 0;
-                          let totalPurchaseValue = 0;
-                          
-                          filteredInvoices.forEach(invoice => {
-                            invoice.items.forEach(item => {
+                          const filtered = selectedYear === 'all' ? invoices : invoices.filter(i => String(i.year) === selectedYear);
+                          let totalFree = 0, totalFreeValue = 0, totalPurchaseValue = 0;
+                          filtered.forEach(inv => {
+                            inv.items.forEach(item => {
                               const qty = parseFloat(item.quantity) || 0;
-                              const freebies = parseFloat(item.freebies) || 0;
-                              const netPrice = parseFloat(item.priceNet || item.price) || 0;
+                              const free = parseFloat(item.freebies) || 0;
+                              const net = parseFloat(item.priceNet || item.price) || 0;
                               const vat = parseFloat(item.vat) || 0;
-                              
-                              const priceWithVAT = netPrice * (1 + vat / 100);
-                              
-                              totalFreebies += freebies;
-                              totalFreebiesValue += freebies * priceWithVAT;
-                              totalPurchaseValue += qty * priceWithVAT;
+                              const priceIVA = net * (1 + vat / 100);
+                              totalFree += free;
+                              totalFreeValue += free * priceIVA;
+                              totalPurchaseValue += qty * priceIVA;
                             });
                           });
-                          
-                          const freebiesPercentage = totalPurchaseValue > 0 
-                            ? (totalFreebiesValue / totalPurchaseValue * 100) 
-                            : 0;
-                          
-                          return (
-                            <>
-                              {totalFreebies > 0 && (
-                                <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4 mb-4">
-                                  <h3 className="font-bold text-green-800 mb-3">Statistiche Omaggi {selectedYear !== 'all' ? selectedYear : ''}</h3>
-                                  <div className="grid grid-cols-3 gap-4">
-                                    <div className="text-center">
-                                      <div className="text-2xl font-bold text-green-700">{totalFreebies.toFixed(0)}</div>
-                                      <div className="text-sm text-gray-600">Pezzi Omaggio</div>
-                                    </div>
-                                    <div className="text-center">
-                                      <div className="text-2xl font-bold text-green-700">€ {totalFreebiesValue.toFixed(2)}</div>
-                                      <div className="text-sm text-gray-600">Valore Omaggi</div>
-                                    </div>
-                                    <div className="text-center">
-                                      <div className="text-2xl font-bold text-green-700">{freebiesPercentage.toFixed(1)}%</div>
-                                      <div className="text-sm text-gray-600">Sconto in Merce</div>
-                                    </div>
-                                  </div>
+                          const perc = totalPurchaseValue > 0 ? (totalFreeValue / totalPurchaseValue) * 100 : 0;
+                          return totalFree > 0 && (
+                            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-300 rounded-lg p-5 mb-6">
+                              <h3 className="font-bold text-green-800 mb-4 text-lg">Statistiche Omaggi {selectedYear !== 'all' ? selectedYear : ''}</h3>
+                              <div className="grid grid-cols-3 gap-6">
+                                <div className="text-center">
+                                  <div className="text-3xl font-bold text-green-700">{totalFree}</div>
+                                  <div className="text-gray-600">Pezzi omaggio</div>
                                 </div>
-                              )}
-                        <table className="w-full">
-                          <thead>
-                            <tr className="bg-gray-100">
-                              <th className="px-4 py-2 text-left">Prodotto</th>
-                              <th className="px-4 py-2 text-right">Costo Reale €</th>
-                              <th className="px-4 py-2 text-right">Prezzo Online €</th>
-                              <th className="px-4 py-2 text-right">Margine %</th>
-                              <th className="px-4 py-2 text-right">Qtà Totale</th>
-                              <th className="px-4 py-2 text-center">Status</th>
+                                <div className="text-center">
+                                  <div className="text-3xl font-bold text-green-700">€ {totalFreeValue.toFixed(2)}</div>
+                                  <div className="text-gray-600">Valore omaggi</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-3xl font-bold text-green-700">{perc.toFixed(1)}%</div>
+                                  <div className="text-gray-600">Sconto in merce</div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-100">
+                            <tr>
+                              <th className="px-4 py-3 text-left font-medium">Prodotto</th>
+                              <th className="px-4 py-3 text-right font-medium">Costo Reale €</th>
+                              <th className="px-4 py-3 text-right font-medium">Prezzo Online €</th>
+                              <th className="px-4 py-3 text-right font-medium">Margine %</th>
+                              <th className="px-4 py-3 text-right font-medium">Qtà Totale</th>
+                              <th className="px-4 py-3 text-center font-medium">Status</th>
                             </tr>
                           </thead>
                           <tbody>
                             {Object.entries(analysis)
-                              .filter(([product, data]) => data.totalQuantity > 0) // Mostra solo prodotti con quantità > 0
+                              .filter(([, d]) => d.totalQuantity > 0)
                               .sort(([, a], [, b]) => a.margin - b.margin)
                               .map(([product, data]) => (
                                 <tr key={product} className="border-b hover:bg-gray-50">
@@ -675,50 +462,37 @@
                                   </td>
                                   <td className="px-4 py-3 text-right">{data.totalQuantity}</td>
                                   <td className="px-4 py-3 text-center">
-                                    {data.margin < 20 ? (
-                                      <span className="text-red-600">⚠️ Basso</span>
-                                    ) : data.margin < 30 ? (
-                                      <span className="text-yellow-600">📊 Medio</span>
-                                    ) : (
-                                      <span className="text-green-600">✅ Buono</span>
-                                    )}
+                                    {data.margin < 20 ? '⚠️ Basso' : data.margin < 30 ? '📊 Medio' : '✅ Buono'}
                                   </td>
                                 </tr>
                               ))}
                             {(() => {
-                              // Calcolo totali
-                              const productsWithQty = Object.entries(analysis).filter(([, data]) => data.totalQuantity > 0);
-                              const totalRevenue = productsWithQty.reduce((sum, [, data]) => 
-                                sum + (data.onlinePrice * data.totalQuantity), 0
-                              );
-                              const totalCost = productsWithQty.reduce((sum, [, data]) => 
-                                sum + (data.avgRealCost * data.totalQuantity), 0
-                              );
-                              const weightedMargin = totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue * 100) : 0;
-                              
+                              const activeProducts = Object.entries(analysis).filter(([, d]) => d.totalQuantity > 0);
+                              const revenue = activeProducts.reduce((s, [, d]) => s + d.onlinePrice * d.totalQuantity, 0);
+                              const cost = activeProducts.reduce((s, [, d]) => s + d.avgRealCost * d.totalQuantity, 0);
+                              const weightedMargin = revenue > 0 ? ((revenue - cost) / revenue) * 100 : 0;
                               return (
                                 <>
-                                  <tr className="border-t-2 border-gray-400 bg-gray-50 font-bold">
-                                    <td className="px-4 py-3" colSpan="6"></td>
+                                  <tr className="border-t-4 border-gray-400 bg-gray-100 font-bold">
+                                    <td colSpan={6} className="py-3"></td>
                                   </tr>
-                                  <tr className="bg-blue-50 font-semibold">
+                                  <tr className="bg-blue-50 font-bold">
                                     <td className="px-4 py-3">STIMA INCASSO</td>
-                                    <td className="px-4 py-3 text-right" colSpan="2">€ {totalRevenue.toFixed(2)}</td>
-                                    <td className="px-4 py-3" colSpan="3"></td>
+                                    <td colSpan={2} className="px-4 py-3 text-right">€ {revenue.toFixed(2)}</td>
+                                    <td colSpan={3}></td>
                                   </tr>
-                                  <tr className="bg-orange-50 font-semibold">
+                                  <tr className="bg-orange-50 font-bold">
                                     <td className="px-4 py-3">COSTO TOTALE REALE</td>
-                                    <td className="px-4 py-3 text-right" colSpan="2">€ {totalCost.toFixed(2)}</td>
-                                    <td className="px-4 py-3" colSpan="3"></td>
+                                    <td colSpan={2} className="px-4 py-3 text-right">€ {cost.toFixed(2)}</td>
+                                    <td colSpan={3}></td>
                                   </tr>
-                                  <tr className={`font-bold text-lg ${weightedMargin < 20 ? 'bg-red-100' : weightedMargin < 30 ? 'bg-yellow-100' : 'bg-green-100'}`}>
-                                    <td className="px-4 py-3">MARGINE MEDIO</td>
-                                    <td className="px-4 py-3 text-right" colSpan="2"></td>
-                                    <td className={`px-4 py-3 text-right ${weightedMargin < 20 ? 'text-red-600' : weightedMargin < 30 ? 'text-yellow-600' : 'text-green-600'}`}>
+                                  <tr className={`font-bold text-xl ${weightedMargin < 20 ? 'bg-red-100' : weightedMargin < 30 ? 'bg-yellow-100' : 'bg-green-100'}`}>
+                                    <td className="px-4 py-4">MARGINE MEDIO PONDERATO</td>
+                                    <td colSpan={2}></td>
+                                    <td className={`px-4 py-4 text-right ${weightedMargin < 20 ? 'text-red-600' : weightedMargin < 30 ? 'text-yellow-600' : 'text-green-600'}`}>
                                       {weightedMargin.toFixed(1)}%
                                     </td>
-                                    <td className="px-4 py-3" colSpan="2"></td>
-                                    <td className="px-4 py-3 text-center text-2xl">
+                                    <td colSpan={2} className="px-4 py-4 text-center text-3xl">
                                       {weightedMargin < 20 ? '❌' : weightedMargin < 30 ? '⚠️' : '✅'}
                                     </td>
                                   </tr>
@@ -727,143 +501,109 @@
                             })()}
                           </tbody>
                         </table>
-                            </>
-                          );
-                        })()}
                       </div>
                     </div>
                   </div>
                 )}
-
+                {/* FATTURE */}
                 {activeTab === 'invoices' && (
-                  <div className="space-y-6">
+                  <div className="space-y-8">
                     <div className="bg-white rounded-lg shadow p-6">
-                      <h2 className="text-xl font-bold mb-4">
-                        {editingInvoice ? '✏️ Modifica Fattura' : 'Nuova Fattura'}
+                      <h2 className="text-2xl font-bold mb-6">
+                        {editingInvoice ? '✏️ Modifica Fattura' : '📄 Nuova Fattura'}
                       </h2>
-                      <div className="grid grid-cols-4 gap-4 mb-4">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                         <div>
                           <label className="block text-sm font-medium mb-1">Anno</label>
-                          <select value={invoiceYear} onChange={(e) => setInvoiceYear(e.target.value)} className="w-full px-3 py-2 border rounded">
-                            {YEARS.map(year => <option key={year} value={year}>{year}</option>)}
+                          <select value={invoiceYear} onChange={e => setInvoiceYear(e.target.value)} className="w-full px-4 py-2 border rounded-lg">
+                            {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
                           </select>
                         </div>
                         <div>
                           <label className="block text-sm font-medium mb-1">Data Fattura</label>
-                          <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className="w-full px-3 py-2 border rounded" />
+                          <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className="w-full px-4 py-2 border rounded-lg" />
                         </div>
                         <div>
                           <label className="block text-sm font-medium mb-1">Numero Fattura</label>
-                          <input type="text" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="es. 3060003884" className="w-full px-3 py-2 border rounded" />
+                          <input type="text" value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} placeholder="es. 3060003884" className="w-full px-4 py-2 border rounded-lg" />
                         </div>
                         <div>
                           <label className="block text-sm font-medium mb-1">Spese Spedizione €</label>
-                          <input type="number" step="0.01" value={shippingCost} onChange={(e) => setShippingCost(e.target.value)} placeholder="0.00" className="w-full px-3 py-2 border rounded" />
+                          <input type="number" step="0.01" value={shippingCost} onChange={e => setShippingCost(e.target.value)} placeholder="0.00" className="w-full px-4 py-2 border rounded-lg" />
                         </div>
                       </div>
-                      
                       {shippingCost && parseFloat(shippingCost) > 0 && (
-                        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
-                          ℹ️ Le spese di spedizione (€{parseFloat(shippingCost).toFixed(2)}) verranno divise equamente per il numero totale di pezzi della fattura (con IVA 22%).
+                        <div className="mb-6 p-4 bg-blue-50 border border-blue-300 rounded-lg text-blue-800">
+                          ℹ️ Le spese di spedizione (€{parseFloat(shippingCost).toFixed(2)}) saranno ripartite proporzionalmente al numero di pezzi (IVA 22%).
                         </div>
                       )}
-
-                      <div className="overflow-x-auto">
-                        <table className="w-full mb-4">
-                          <thead>
-                            <tr className="bg-gray-100">
-                              <th className="px-2 py-2 text-left">Quantità</th>
-                              <th className="px-2 py-2 text-left">Prodotto</th>
-                              <th className="px-2 py-2 text-left">Prezzo Unit. €</th>
-                              <th className="px-2 py-2 text-left">Sconto %</th>
-                              <th className="px-2 py-2 text-left">IVA %</th>
-                              <th className="px-2 py-2 text-left">Omaggi</th>
-                              <th className="px-2 py-2"></th>
+                      <div className="overflow-x-auto mb-6">
+                        <table className="w-full">
+                          <thead className="bg-gray-100">
+                            <tr>
+                              <th className="px-3 py-2 text-left">Qtà</th>
+                              <th className="px-3 py-2 text-left">Prodotto</th>
+                              <th className="px-3 py-2 text-left">Prezzo Unit. €</th>
+                              <th className="px-3 py-2 text-left">Sconto %</th>
+                              <th className="px-3 py-2 text-left">IVA %</th>
+                              <th className="px-3 py-2 text-left">Omaggi</th>
+                              <th className="px-3 py-2"></th>
                             </tr>
                           </thead>
                           <tbody>
-                            {invoiceItems.map((item, index) => (
-                              <tr key={index} className="border-b">
-                                <td className="px-2 py-2">
-                                  <input type="number" value={item.quantity} onChange={(e) => updateInvoiceItem(index, 'quantity', e.target.value)} className="w-full px-2 py-1 border rounded text-sm" />
-                                </td>
-                                <td className="px-2 py-2">
-                                  <select value={item.product} onChange={(e) => updateInvoiceItem(index, 'product', e.target.value)} className="w-full px-2 py-1 border rounded text-sm">
+                            {invoiceItems.map((item, i) => (
+                              <tr key={i} className="border-b">
+                                <td className="px-3 py-2"><input type="number" value={item.quantity} onChange={e => updateInvoiceItem(i, 'quantity', e.target.value)} className="w-full px-2 py-1 border rounded" /></td>
+                                <td className="px-3 py-2">
+                                  <select value={item.product} onChange={e => updateInvoiceItem(i, 'product', e.target.value)} className="w-full px-2 py-1 border rounded">
                                     <option value="">Seleziona...</option>
                                     {PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
                                   </select>
                                 </td>
-                                <td className="px-2 py-2">
-                                  <input type="number" step="0.01" value={item.price} onChange={(e) => updateInvoiceItem(index, 'price', e.target.value)} className="w-full px-2 py-1 border rounded text-sm" placeholder="Prezzo lordo" />
-                                </td>
-                                <td className="px-2 py-2">
-                                  <input type="number" step="0.01" value={item.discount} onChange={(e) => updateInvoiceItem(index, 'discount', e.target.value)} className="w-full px-2 py-1 border rounded text-sm" placeholder="0" />
-                                </td>
-                                <td className="px-2 py-2">
-                                  <select value={item.vat} onChange={(e) => updateInvoiceItem(index, 'vat', e.target.value)} className="w-full px-2 py-1 border rounded text-sm">
+                                <td className="px-3 py-2"><input type="number" step="0.01" value={item.price} onChange={e => updateInvoiceItem(i, 'price', e.target.value)} placeholder="lordo" className="w-full px-2 py-1 border rounded" /></td>
+                                <td className="px-3 py-2"><input type="number" step="0.01" value={item.discount} onChange={e => updateInvoiceItem(i, 'discount', e.target.value)} placeholder="0" className="w-full px-2 py-1 border rounded" /></td>
+                                <td className="px-3 py-2">
+                                  <select value={item.vat} onChange={e => updateInvoiceItem(i, 'vat', e.target.value)} className="w-full px-2 py-1 border rounded">
                                     <option value="10">10%</option>
                                     <option value="22">22%</option>
                                   </select>
                                 </td>
-                                <td className="px-2 py-2">
-                                  <input type="number" value={item.freebies} onChange={(e) => updateInvoiceItem(index, 'freebies', e.target.value)} placeholder="0" className="w-full px-2 py-1 border rounded text-sm" />
-                                </td>
-                                <td className="px-2 py-2">
-                                  <button onClick={() => removeInvoiceItem(index)} className="text-red-600 hover:text-red-800">
-                                    🗑️
-                                  </button>
-                                </td>
+                                <td className="px-3 py-2"><input type="number" value={item.freebies} onChange={e => updateInvoiceItem(i, 'freebies', e.target.value)} placeholder="0" className="w-full px-2 py-1 border rounded" /></td>
+                                <td className="px-3 py-2 text-center"><button onClick={() => removeInvoiceItem(i)} className="text-red-600 hover:text-red-800 text-xl">🗑️</button></td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
-
-                      <div className="flex gap-2">
-                        <button onClick={addInvoiceItem} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">
-                          ➕ Aggiungi Riga
-                        </button>
+                      <div className="flex gap-3">
+                        <button onClick={addInvoiceItem} className="px-5 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">➕ Aggiungi riga</button>
                         {editingInvoice ? (
                           <>
-                            <button onClick={updateInvoice} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700" disabled={isLoading}>
-                              ✅ Aggiorna Fattura
-                            </button>
-                            <button onClick={cancelEdit} className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500" disabled={isLoading}>
-                              ❌ Annulla
-                            </button>
+                            <button onClick={updateInvoice} disabled={isLoading} className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">✅ Aggiorna</button>
+                            <button onClick={resetForm} className="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600">❌ Annulla</button>
                           </>
                         ) : (
-                          <button onClick={saveInvoice} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700" disabled={isLoading}>
-                            💾 Salva Fattura
-                          </button>
+                          <button onClick={saveInvoice} disabled={isLoading} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">💾 Salva Fattura</button>
                         )}
                       </div>
                     </div>
-
                     <div className="bg-white rounded-lg shadow p-6">
-                      <h2 className="text-xl font-bold mb-4">Fatture Inserite ({invoices.length})</h2>
-                      <div className="space-y-2">
-                        {invoices.map(invoice => (
-                          <div key={invoice.id} className="border rounded p-4 hover:bg-gray-50">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <div className="font-bold">{invoice.number} - {invoice.date} ({invoice.year})</div>
-                                <div className="text-sm text-gray-600 mt-1">
-                                  {invoice.items.map((item, i) => (
-                                    <div key={i}>
-                                      {item.product}: {item.quantity} pz + {item.freebies || 0} omaggio @ €{item.price}
-                                    </div>
-                                  ))}
-                                </div>
+                      <h2 className="text-2xl font-bold mb-4">Fatture inserite ({invoices.length})</h2>
+                      <div className="space-y-3">
+                        {invoices.slice().sort((a, b) => b.date.localeCompare(a.date)).map(inv => (
+                          <div key={inv.id} className="border rounded-lg p-4 hover:bg-gray-50 flex justify-between items-start">
+                            <div>
+                              <div className="font-bold text-lg">{inv.number} - {inv.date} ({inv.year})</div>
+                              {inv.shippingCost > 0 && <div className="text-sm text-gray-600">Spese spedizione: €{inv.shippingCost.toFixed(2)}</div>}
+                              <div className="text-sm text-gray-700 mt-2">
+                                {inv.items.map((it, idx) => (
+                                  <div key={idx}>• {it.product}: {it.quantity} pz + {it.freebies || 0} omaggi @ €{it.price} {it.discount > 0 && `(sconto ${it.discount}%)`}</div>
+                                ))}
                               </div>
-                              <div className="flex gap-2">
-                                <button onClick={() => startEditInvoice(invoice)} className="text-blue-600 hover:text-blue-800" disabled={isLoading}>
-                                  ✏️
-                                </button>
-                                <button onClick={() => deleteInvoice(invoice.id)} className="text-red-600 hover:text-red-800" disabled={isLoading}>
-                                  🗑️
-                                </button>
-                              </div>
+                            </div>
+                            <div className="flex gap-3">
+                              <button onClick={() => startEditInvoice(inv)} disabled={isLoading} className="text-blue-600 hover:text-blue-800 text-2xl">✏️</button>
+                              <button onClick={() => deleteInvoice(inv.id)} disabled={isLoading} className="text-red-600 hover:text-red-800 text-2xl">🗑️</button>
                             </div>
                           </div>
                         ))}
@@ -871,67 +611,59 @@
                     </div>
                   </div>
                 )}
-
+                {/* NOTE DI CREDITO */}
                 {activeTab === 'credits' && (
-                  <div className="space-y-6">
+                  <div className="space-y-8">
                     <div className="bg-white rounded-lg shadow p-6">
-                      <h2 className="text-xl font-bold mb-4">Nuova Nota di Credito</h2>
-                      <div className="grid grid-cols-2 gap-4 mb-4">
+                      <h2 className="text-2xl font-bold mb-6">Nuova Nota di Credito</h2>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-lg">
                         <div>
                           <label className="block text-sm font-medium mb-1">Anno</label>
-                          <select value={creditYear} onChange={(e) => setCreditYear(e.target.value)} className="w-full px-3 py-2 border rounded">
-                            {YEARS.map(year => <option key={year} value={year}>{year}</option>)}
+                          <select value={creditYear} onChange={e => setCreditYear(e.target.value)} className="w-full px-4 py-2 border rounded-lg">
+                            {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
                           </select>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium mb-1">Importo Bonifico €</label>
-                          <input type="number" step="0.01" value={creditAmount} onChange={(e) => setCreditAmount(e.target.value)} placeholder="es. 500.00" className="w-full px-3 py-2 border rounded" />
+                          <label className="block text-sm font-medium mb-1">Importo €</label>
+                          <input type="number" step="0.01" value={creditAmount} onChange={e => setCreditAmount(e.target.value)} placeholder="es. 250.00" className="w-full px-4 py-2 border rounded-lg" />
                         </div>
                       </div>
-                      <button onClick={saveCreditNote} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700" disabled={isLoading}>
-                        💾 Salva
+                      <button onClick={saveCreditNote} disabled={isLoading} className="mt-6 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        💾 Salva Nota di Credito
                       </button>
                     </div>
-
                     <div className="bg-white rounded-lg shadow p-6">
-                      <h2 className="text-xl font-bold mb-4">Note di Credito ({creditNotes.length})</h2>
-                      <div className="space-y-2">
-                        {creditNotes.map(note => (
-                          <div key={note.id} className="border rounded p-4 hover:bg-gray-50 flex justify-between items-center">
-                            <div>
-                              <span className="font-bold">{note.year}</span> - €{note.amount.toFixed(2)}
-                            </div>
-                            <button onClick={() => deleteCreditNote(note.id)} className="text-red-600 hover:text-red-800" disabled={isLoading}>
-                              🗑️
-                            </button>
+                      <h2 className="text-2xl font-bold mb-4">Note di Credito Inserite ({creditNotes.length})</h2>
+                      <div className="space-y-3">
+                        {creditNotes.slice().sort((a, b) => b.year - a.year).map(note => (
+                          <div key={note.id} className="border rounded-lg p-4 flex justify-between items-center hover:bg-gray-50">
+                            <div className="font-medium text-lg">{note.year} - € {note.amount.toFixed(2)}</div>
+                            <button onClick={() => deleteCreditNote(note.id)} disabled={isLoading} className="text-red-600 hover:text-red-800 text-2xl">🗑️</button>
                           </div>
                         ))}
                       </div>
                     </div>
                   </div>
                 )}
-
+                {/* PREZZI ONLINE */}
                 {activeTab === 'prices' && (
                   <div className="bg-white rounded-lg shadow p-6">
-                    <h2 className="text-xl font-bold mb-4">Prezzi Online</h2>
-                    <div className="grid grid-cols-2 gap-4">
+                    <h2 className="text-2xl font-bold mb-6">Prezzi Online</h2>
+                    <p className="text-gray-600 mb-6">I prezzi si salvano automaticamente dopo 2 secondi dall'ultima modifica.</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                       {PRODUCTS.map(product => (
-                        <div key={product} className="flex items-center gap-2">
-                          <label className="w-48 text-sm font-medium">{product}</label>
+                        <div key={product} className="flex items-center gap-4">
+                          <label className="w-64 text-sm font-medium truncate">{product}</label>
                           <input
                             type="number"
                             step="0.01"
                             value={onlinePrices[product] || ''}
-                            onChange={(e) => {
-                              const updated = { ...onlinePrices, [product]: parseFloat(e.target.value) || 0 };
-                              setOnlinePrices(updated);
-                            }}
-                            onBlur={(e) => e.target.value && updateOnlinePrice(product, e.target.value)}
+                            onChange={e => handlePriceChange(product, e.target.value)}
                             placeholder="0.00"
-                            className="flex-1 px-3 py-2 border rounded"
+                            className="flex-1 px-4 py-2 border rounded-lg"
                             disabled={isLoading}
                           />
-                          <span className="text-sm text-gray-500">€</span>
+                          <span className="text-gray-500">€</span>
                         </div>
                       ))}
                     </div>
@@ -941,8 +673,7 @@
             </div>
           );
         }
-
         ReactDOM.render(<App />, document.getElementById('root'));
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9b29aa319d46ea45',t:'MTc2NjUxMTg0NC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</body>
 </html>
