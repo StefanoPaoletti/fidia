@@ -27,7 +27,7 @@
         const YEARS = ['2019', '2020', '2021', '2022', '2023', '2024', '2025', '2026'];
         
         const SHEET_ID = '1FvExAXdbcPeA3vowfpVm1D4IO68GYF4s5GpzesvAJu8';
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyX5dwnxE0LeYXgpBTvOZ5l6RR63JLw5qSQQBAcREdrw2DFc6fz9RZELn_noz1qxq2v/exec';
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby60FDbjUyyCcFTf64vV1NsCiDkKzU4lZkuBy1aijszvsszeUH4cYnr036NcTaH8fGe/exec';
         
         function App() {
           const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -67,61 +67,45 @@
           }, []);
           
           const loadFromGoogleSheets = async (pwd = savedPassword) => {
+            if (!pwd) return;
             setIsLoading(true);
             try {
-              // Usa JSONP per aggirare CORS
-              const callbackName = 'jsonpCallback_' + Date.now();
+              const response = await fetch(SCRIPT_URL + '?password=' + encodeURIComponent(pwd));
+              if (!response.ok) throw new Error('Errore server');
+              const data = await response.json();
               
-              await new Promise((resolve, reject) => {
-                window[callbackName] = (data) => {
-                  try {
-                    const invoiceMap = {};
-                    (data.invoices || []).forEach(row => {
-                      if (!invoiceMap[row.id]) {
-                        invoiceMap[row.id] = {
-                          id: row.id,
-                          year: row.year,
-                          date: row.date,
-                          number: row.number,
-                          shippingCost: row.shippingCost || 0,
-                          items: []
-                        };
-                      }
-                      invoiceMap[row.id].items.push({
-                        product: row.product,
-                        quantity: row.quantity,
-                        priceGross: row.priceGross,
-                        priceNet: row.priceNet,
-                        discount: row.discount || 0,
-                        vat: row.vat,
-                        freebies: row.freebies
-                      });
-                    });
-                    
-                    setInvoices(Object.values(invoiceMap));
-                    setCreditNotes(data.creditNotes || []);
-                    setOnlinePrices(data.onlinePrices || {});
-                    
-                    delete window[callbackName];
-                    resolve();
-                  } catch (err) {
-                    reject(err);
-                  }
-                };
-                
-                const script = document.createElement('script');
-                script.src = SCRIPT_URL + '?callback=' + callbackName;
-                script.onerror = () => reject(new Error('Failed to load'));
-                document.body.appendChild(script);
-                
-                setTimeout(() => {
-                  if (window[callbackName]) {
-                    document.body.removeChild(script);
-                    reject(new Error('Timeout'));
-                  }
-                }, 10000);
+              if (data.success === false || data.error === "Password errata") {
+                alert('Password errata. Reinseriscila.');
+                handleLogout();
+                return;
+              }
+              
+              const invoiceMap = {};
+              (data.invoices || []).forEach(row => {
+                if (!invoiceMap[row.id]) {
+                  invoiceMap[row.id] = {
+                    id: row.id,
+                    year: row.year,
+                    date: row.date,
+                    number: row.number,
+                    shippingCost: row.shippingCost || 0,
+                    items: []
+                  };
+                }
+                invoiceMap[row.id].items.push({
+                  product: row.product,
+                  quantity: row.quantity,
+                  priceGross: row.priceGross,
+                  priceNet: row.priceNet,
+                  discount: row.discount || 0,
+                  vat: row.vat,
+                  freebies: row.freebies
+                });
               });
               
+              setInvoices(Object.values(invoiceMap));
+              setCreditNotes(data.creditNotes || []);
+              setOnlinePrices(data.onlinePrices || {});
             } catch (error) {
               console.error('Errore caricamento:', error);
               alert('Errore nel caricamento dei dati');
