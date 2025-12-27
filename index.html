@@ -83,10 +83,17 @@
               const invoiceMap = {};
               (data.invoices || []).forEach(row => {
                 if (!invoiceMap[row.id]) {
+                  // Corregge il formato data: se è una stringa tipo "2026-01-01", la converte correttamente
+                  let dateStr = row.date;
+                  if (typeof dateStr === 'string' && dateStr.includes('-')) {
+                    // Formato YYYY-MM-DD
+                    dateStr = dateStr.split('T')[0]; // Rimuove eventuale parte time
+                  }
+                  
                   invoiceMap[row.id] = {
                     id: row.id,
                     year: row.year,
-                    date: row.date,
+                    date: dateStr,
                     number: row.number,
                     shippingCost: row.shippingCost || 0,
                     items: []
