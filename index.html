@@ -25,7 +25,7 @@
         ];
         const YEARS = ['2019', '2020', '2021', '2022', '2023', '2024', '2025', '2026'];
         const SHEET_ID = '1FvExAXdbcPeA3vowfpVm1D4IO68GYF4s5GpzesvAJu8';
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyX5dwnxE0LeYXgpBTvOZ5l6RR63JLw5qSQQBAcREdrw2DFc6fz9RZELn_noz1qxq2v/exec'; // Aggiorna se cambi deployment
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyX5dwnxE0LeYXgpBTvOZ5l6RR63JLw5qSQQBAcREdrw2DFc6fz9RZELn_noz1qxq2v/exec'; // <-- Verifica che sia l'URL corretto del tuo deployment
 
         function App() {
           const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -53,9 +53,9 @@
           const [creditYear, setCreditYear] = useState(new Date().getFullYear().toString());
           const [creditAmount, setCreditAmount] = useState('');
 
-          // Timer prezzi online
           const priceTimerRef = useRef(null);
 
+          // Carica password salvata all'avvio
           useEffect(() => {
             const stored = localStorage.getItem('fidiaAppPassword');
             if (stored) {
@@ -65,23 +65,24 @@
             }
           }, []);
 
+          // Funzione per caricare i dati (usa POST per autenticare + GET per leggere)
           const loadFromGoogleSheets = async (pwd = savedPassword) => {
             if (!pwd) return;
             setIsLoading(true);
             try {
-              // Autenticazione sicura con POST (azione fittizia 'read')
-              await fetch(SCRIPT_URL, {
+              // Autenticazione con POST
+              const authResponse = await fetch(SCRIPT_URL, {
                 method: 'POST',
-                mode: 'no-cors',
                 body: JSON.stringify({ password: pwd, action: 'read' })
               });
-              await new Promise(r => setTimeout(r, 800));
+              if (!authResponse.ok) throw new Error('Errore autenticazione');
 
-              // Caricamento dati con GET semplice
-              const response = await fetch(SCRIPT_URL);
-              if (!response.ok) throw new Error('Errore server');
-              const data = await response.json();
+              // Lettura dati con GET semplice
+              const dataResponse = await fetch(SCRIPT_URL);
+              if (!dataResponse.ok) throw new Error('Errore caricamento dati');
+              const data = await dataResponse.json();
 
+              // Raggruppa fatture per ID
               const invoiceMap = {};
               data.invoices.forEach(row => {
                 if (!invoiceMap[row.id]) {
@@ -97,17 +98,19 @@
                 invoiceMap[row.id].items.push({
                   product: row.product,
                   quantity: row.quantity,
-                  price: row.priceGross,      // netto prima sconto
+                  price: row.priceGross,
                   discount: row.discount || 0,
                   vat: row.vat,
                   freebies: row.freebies || 0,
-                  priceNet: row.priceNet,     // netto dopo sconto
+                  priceNet: row.priceNet,
                   shippingCost: row.shippingCost || 0
                 });
               });
+
               setInvoices(Object.values(invoiceMap));
               setCreditNotes(data.creditNotes || []);
               setOnlinePrices(data.onlinePrices || {});
+
             } catch (error) {
               console.error(error);
               alert('Errore di connessione o password errata.');
@@ -116,15 +119,16 @@
             setIsLoading(false);
           };
 
+          // Salvataggio generico
           const saveToGoogleSheets = async (action, payload) => {
             if (!savedPassword) return false;
             setIsLoading(true);
             try {
-              await fetch(SCRIPT_URL, {
+              const response = await fetch(SCRIPT_URL, {
                 method: 'POST',
-                mode: 'no-cors',
                 body: JSON.stringify({ password: savedPassword, action, ...payload })
               });
+              if (!response.ok) throw new Error('Errore server');
               await new Promise(r => setTimeout(r, 1200));
               await loadFromGoogleSheets();
               return true;
@@ -136,12 +140,27 @@
             }
           };
 
-          const handleLogin = () => {
+          // Login con POST
+          const handleLogin = async () => {
             if (!password) return alert('Inserisci la password!');
-            localStorage.setItem('fidiaAppPassword', password);
-            setSavedPassword(password);
-            setIsAuthenticated(true);
-            loadFromGoogleSheets(password);
+            setIsLoading(true);
+            try {
+              const response = await fetch(SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({ password: password, action: 'read' })
+              });
+              if (!response.ok) throw new Error('Password errata');
+              const result = await response.json();
+              if (result.success === false) throw new Error('Password errata');
+
+              localStorage.setItem('fidiaAppPassword', password);
+              setSavedPassword(password);
+              setIsAuthenticated(true);
+              await loadFromGoogleSheets(password);
+            } catch (err) {
+              alert('Password errata o errore di connessione');
+            }
+            setIsLoading(false);
           };
 
           const handleLogout = () => {
@@ -184,7 +203,7 @@
               year: invoiceYear,
               shippingCost: shipping,
               items: validItems.map(item => {
-                const baseNetPrice = parseFloat(item.price) || 0;
+                const baseNetPrice = parseFloat(item.price) || 0; // netto prima sconto
                 const discount = parseFloat(item.discount) || 0;
                 const netAfterDiscount = baseNetPrice * (1 - discount / 100);
 
@@ -438,6 +457,7 @@
               </div>
 
               <div className="max-w-7xl mx-auto px-4 py-8">
+                {/* DASHBOARD */}
                 {activeTab === 'dashboard' && (
                   <div className="space-y-8">
                     <div className="bg-white rounded-lg shadow p-6">
@@ -559,6 +579,7 @@
                   </div>
                 )}
 
+                {/* FATTURE */}
                 {activeTab === 'invoices' && (
                   <div className="space-y-8">
                     <div className="bg-white rounded-lg shadow p-6">
@@ -666,6 +687,7 @@
                   </div>
                 )}
 
+                {/* NOTE DI CREDITO */}
                 {activeTab === 'credits' && (
                   <div className="space-y-8">
                     <div className="bg-white rounded-lg shadow p-6">
@@ -700,6 +722,7 @@
                   </div>
                 )}
 
+                {/* PREZZI ONLINE */}
                 {activeTab === 'prices' && (
                   <div className="bg-white rounded-lg shadow p-6">
                     <h2 className="text-2xl font-bold mb-6">Prezzi Online</h2>
