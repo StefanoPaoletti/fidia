@@ -18,6 +18,8 @@
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .card-hover { transition: all 0.2s ease; }
         .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
@@ -26,26 +28,24 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // Nuova URL fornita
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzWNF1IztITgiIVocJW7t09ijrmYQOz8R1RekoEstss8S-d8_8Ylopv8S-EZOprVD99/exec';
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxv9Xxi4i-Kw0pPK8Xd7YYFpqr992YCoTd7mZog77PYDlXosRMnY_3sQ6hZOC5pBgVq/exec';
         
         const PRODUCTS = [
-            'BLU GEL', 'BLU YAL', 'IRIDIUM GARZE', 'LACRISEK', 'LUTEINOMEGA', 'MERAMIRT', 
-            'MERAMIRT CM', 'MERAMIRT XG', 'MYRIALEN GEL', 'OPTO CARE', 'OPTO GEL', 
-            'OPTO IDRO', 'OPTO MYO', 'OPTO OMEGA', 'OPTO RED', 'OPTO RELAX', 
-            'OPTO SOL', 'OPTO VITREO', 'OPTO YAL', 'OPTO YAL CREAM', 'PROLENS', 
-            'RESPILENS 100', 'RESPILENS 360', 'TRIUM', 'VITREOXIGEN'
+            'PROLENS', 'OPTO RED', 'OPTO SOL', 'OPTO YAL', 'OPTO YAL CREAM', 'OPTO GEL', 'OPTO IDRO',
+            'OPTO RELAX', 'OPTO VITREO', 'RESPILENS 100', 'RESPILENS 360', 'OPTO CARE', 'OPTO MYO',
+            'OPTO OMEGA', 'BLU GEL', 'BLU YAL', 'IRIDIUM GARZE', 'TRIUM',
+            'VITREOXIGEN', 'LUTEINOMEGA', 'MERAMIRT', 'MYRIALEN GEL',
+            'MERAMIRT CM', 'MERAMIRT XG', 'LACRISEK'
         ].sort();
 
-        const YEARS = ['2023', '2024', '2025', '2026'];
+        const YEARS = ['2019', '2020', '2021', '2022', '2023', '2024', '2025', '2026'];
 
-        // Componenti Icone
         const Icons = {
-            Chart: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>,
-            Plus: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>,
-            Tag: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>,
-            History: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
-            Save: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+            Dashboard: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v12a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2z" /></svg>,
+            Invoice: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
+            Credit: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12z" /></svg>,
+            Price: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>,
+            Search: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
         };
 
         function App() {
@@ -55,174 +55,226 @@
             const [searchTerm, setSearchTerm] = useState('');
             const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
             
-            // Dati
             const [invoices, setInvoices] = useState([]);
+            const [creditNotes, setCreditNotes] = useState([]);
             const [onlinePrices, setOnlinePrices] = useState({});
             const priceTimerRef = useRef(null);
 
             useEffect(() => {
-                const pass = localStorage.getItem('fidia_auth');
-                if (pass) { setIsAuthenticated(true); fetchData(); }
+                const pass = localStorage.getItem('fidiaAppPassword');
+                if (pass) { setIsAuthenticated(true); loadData(); }
             }, []);
 
-            const fetchData = async () => {
+            const loadData = async () => {
                 setIsLoading(true);
                 try {
-                    const res = await fetch(SCRIPT_URL);
-                    const data = await res.json();
-                    setInvoices(data.invoices || []);
+                    const response = await fetch(SCRIPT_URL);
+                    const data = await response.json();
+                    
+                    const invoiceMap = {};
+                    (data.invoices || []).forEach(row => {
+                        if (!invoiceMap[row.id]) {
+                            invoiceMap[row.id] = { ...row, items: [] };
+                        }
+                        invoiceMap[row.id].items.push(row);
+                    });
+                    
+                    setInvoices(Object.values(invoiceMap));
+                    setCreditNotes(data.creditNotes || []);
                     setOnlinePrices(data.onlinePrices || {});
-                } catch (e) { console.error("Errore caricamento", e); }
+                } catch (e) { alert("Errore connessione"); }
                 setIsLoading(false);
             };
 
             const analysis = useMemo(() => {
-                const results = {};
-                const filteredInvoices = selectedYear === 'Tutti' ? invoices : invoices.filter(inv => String(inv.year) === selectedYear);
+                const result = {};
+                const filteredInvoices = selectedYear === 'all' ? invoices : invoices.filter(inv => String(inv.year) === selectedYear);
+                
+                // Pre-calcolo totale costi anno per ripartizione note credito
+                const totalCostByYear = {};
+                filteredInvoices.forEach(inv => {
+                    const year = String(inv.year);
+                    if (!totalCostByYear[year]) totalCostByYear[year] = 0;
+                    inv.items.forEach(item => {
+                        const q = parseFloat(item.quantity) || 0;
+                        const net = parseFloat(item.priceNet || item.priceGross) || 0;
+                        const vat = parseFloat(item.vat) || 10;
+                        totalCostByYear[year] += (q * net * (1 + vat/100));
+                    });
+                });
 
-                PRODUCTS.forEach(prod => {
-                    const rows = filteredInvoices.filter(r => r.product === prod);
-                    let totalQty = 0, totalNetCost = 0;
+                PRODUCTS.forEach(product => {
+                    let totalCost = 0;
+                    let totalQty = 0;
+                    let yearCostMap = {};
 
-                    rows.forEach(r => {
-                        const q = parseFloat(r.quantity) || 0;
-                        const f = parseFloat(r.freebies) || 0;
-                        const price = parseFloat(r.priceNet) || 0;
-                        const vat = parseFloat(r.vat) || 10;
-                        
-                        totalQty += (q + f);
-                        totalNetCost += (q * price * (1 + vat/100));
+                    filteredInvoices.forEach(inv => {
+                        const totalPieces = inv.items.reduce((sum, i) => sum + (parseFloat(i.quantity) || 0) + (parseFloat(i.freebies) || 0), 0);
+                        const shipping = parseFloat(inv.shippingCost) || 0;
+
+                        inv.items.forEach(item => {
+                            if (item.product !== product) return;
+                            const q = parseFloat(item.quantity) || 0;
+                            const f = parseFloat(item.freebies) || 0;
+                            const net = parseFloat(item.priceNet || item.priceGross) || 0;
+                            const vat = parseFloat(item.vat) || 10;
+                            
+                            const itemNetCost = q * net * (1 + vat/100);
+                            const shippingShare = totalPieces > 0 ? ((q + f) / totalPieces) * shipping * 1.22 : 0;
+                            
+                            totalCost += (itemNetCost + shippingShare);
+                            totalQty += (q + f);
+                            
+                            if (!yearCostMap[inv.year]) yearCostMap[inv.year] = 0;
+                            yearCostMap[inv.year] += (itemNetCost + shippingShare);
+                        });
                     });
 
-                    const avgCost = totalQty > 0 ? totalNetCost / totalQty : 0;
-                    const online = onlinePrices[prod] || 0;
-                    
-                    results[prod] = {
-                        avgCost,
-                        online,
-                        margin: online > 0 ? ((online - avgCost) / online) * 100 : 0,
+                    // Sottrazione note credito proporzionali
+                    const relevantCredits = selectedYear === 'all' ? creditNotes : creditNotes.filter(c => String(c.year) === selectedYear);
+                    relevantCredits.forEach(c => {
+                        const y = String(c.year);
+                        if (yearCostMap[y] && totalCostByYear[y]) {
+                            totalCost -= (c.amount * (yearCostMap[y] / totalCostByYear[y]));
+                        }
+                    });
+
+                    const avg = totalQty > 0 ? totalCost / totalQty : 0;
+                    const online = onlinePrices[product] || 0;
+                    result[product] = {
+                        avgCost: avg,
+                        online: online,
+                        margin: online > 0 ? ((online - avg) / online) * 100 : 0,
                         qty: totalQty
                     };
                 });
-                return results;
-            }, [invoices, onlinePrices, selectedYear]);
+                return result;
+            }, [invoices, creditNotes, onlinePrices, selectedYear]);
 
-            const handlePriceChange = (prod, val) => {
-                const newPrices = { ...onlinePrices, [prod]: parseFloat(val) || 0 };
-                setOnlinePrices(newPrices);
-
-                if (priceTimerRef.current) clearTimeout(priceTimerRef.current);
-                priceTimerRef.current = setTimeout(async () => {
-                    await fetch(SCRIPT_URL, {
-                        method: 'POST',
-                        mode: 'no-cors',
-                        body: JSON.stringify({ type: 'UPDATE_PRICES', prices: newPrices })
-                    });
-                }, 1500);
-            };
+            const stats = useMemo(() => {
+                const active = Object.values(analysis).filter(d => d.qty > 0);
+                const totalInvested = active.reduce((sum, d) => sum + (d.avgCost * d.qty), 0);
+                const totalPotential = active.reduce((sum, d) => sum + (d.online * d.qty), 0);
+                const avgMargin = totalPotential > 0 ? ((totalPotential - totalInvested) / totalPotential) * 100 : 0;
+                return { totalInvested, totalPotential, avgMargin };
+            }, [analysis]);
 
             if (!isAuthenticated) return (
-                <div className="min-h-screen flex items-center justify-center bg-slate-900">
-                    <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md">
-                        <h2 className="text-2xl font-bold text-center mb-6">Fidia Analytics Login</h2>
+                <div className="min-h-screen flex items-center justify-center bg-slate-900 p-6">
+                    <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl p-10 animate-fade-in">
+                        <div className="text-center mb-10">
+                            <div className="inline-flex items-center justify-center w-20 h-20 bg-indigo-50 text-indigo-600 rounded-3xl mb-6">
+                                <Icons.Dashboard />
+                            </div>
+                            <h1 className="text-3xl font-black text-slate-800 tracking-tight">Fidia Analytics</h1>
+                            <p className="text-slate-400 mt-2 font-medium">Inserisci la chiave di accesso</p>
+                        </div>
                         <input 
                             type="password" 
-                            placeholder="Password" 
-                            className="w-full p-4 border rounded-xl mb-4 outline-none focus:ring-2 focus:ring-indigo-500"
-                            onKeyDown={e => e.key === 'Enter' && (localStorage.setItem('fidia_auth', 'ok'), setIsAuthenticated(true), fetchData())}
+                            className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none mb-6 transition-all"
+                            placeholder="Password"
+                            onKeyDown={e => e.key === 'Enter' && (localStorage.setItem('fidiaAppPassword', e.target.value), setIsAuthenticated(true), loadData())}
                         />
                         <button 
-                            onClick={() => { localStorage.setItem('fidia_auth', 'ok'); setIsAuthenticated(true); fetchData(); }}
-                            className="w-full bg-indigo-600 text-white p-4 rounded-xl font-bold hover:bg-indigo-700 transition-all"
+                            onClick={() => { const p = document.querySelector('input').value; localStorage.setItem('fidiaAppPassword', p); setIsAuthenticated(true); loadData(); }}
+                            className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100"
                         >
-                            Entra nell'area Pro
+                            Accedi al Sistema
                         </button>
                     </div>
                 </div>
             );
 
             return (
-                <div className="min-h-screen flex bg-slate-50">
+                <div className="min-h-screen flex">
                     {/* SIDEBAR */}
-                    <aside className="w-72 bg-white border-r border-slate-200 hidden lg:flex flex-col sticky top-0 h-screen">
-                        <div className="p-8 border-b border-slate-100">
-                            <h1 className="text-2xl font-black text-indigo-600 tracking-tighter">FIDIA ANALYTICS</h1>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Management Tool v2.0</p>
+                    <aside className="w-72 bg-white border-r border-slate-200 hidden lg:flex flex-col fixed h-full z-20">
+                        <div className="p-8 border-b border-slate-50">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-indigo-600 rounded-lg"></div>
+                                <h2 className="text-xl font-black text-slate-800 tracking-tighter">FIDIA <span className="text-indigo-600">PRO</span></h2>
+                            </div>
                         </div>
                         
-                        <nav className="flex-1 p-4 space-y-2 mt-4">
+                        <nav className="flex-1 p-6 space-y-2">
                             {[
-                                { id: 'dashboard', label: 'Dashboard', icon: <Icons.Chart /> },
-                                { id: 'prices', label: 'Prezzi Online', icon: <Icons.Tag /> },
-                                { id: 'history', label: 'Storico Fatture', icon: <Icons.History /> },
+                                { id: 'dashboard', label: 'Dashboard', icon: <Icons.Dashboard /> },
+                                { id: 'invoices', label: 'Fatture', icon: <Icons.Invoice /> },
+                                { id: 'credits', label: 'Note Credito', icon: <Icons.Credit /> },
+                                { id: 'prices', label: 'Prezzi Online', icon: <Icons.Price /> },
                             ].map(item => (
                                 <button 
                                     key={item.id}
                                     onClick={() => setActiveTab(item.id)}
-                                    className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold text-sm transition-all ${activeTab === item.id ? 'sidebar-active shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                                    className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold text-sm transition-all ${activeTab === item.id ? 'sidebar-active shadow-sm' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'}`}
                                 >
                                     {item.icon} {item.label}
                                 </button>
                             ))}
                         </nav>
 
-                        <div className="p-6 border-t border-slate-100">
-                            <button onClick={() => {localStorage.clear(); location.reload();}} className="flex items-center gap-2 text-red-500 font-bold text-sm hover:opacity-70">
-                                <span>Logout</span>
+                        <div className="p-8 border-t border-slate-50">
+                            <button onClick={() => {localStorage.clear(); location.reload();}} className="flex items-center gap-3 text-red-500 font-bold text-sm hover:bg-red-50 w-full p-4 rounded-xl transition-all">
+                                🔌 Disconnetti
                             </button>
                         </div>
                     </aside>
 
                     {/* MAIN */}
-                    <main className="flex-1 p-6 lg:p-12 max-w-7xl mx-auto w-full">
+                    <main className="flex-1 lg:ml-72 p-6 lg:p-12">
                         {isLoading && <div className="fixed top-0 left-0 w-full h-1 bg-indigo-600 animate-pulse z-50"></div>}
                         
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+                        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6 animate-fade-in">
                             <div>
-                                <h2 className="text-3xl font-extrabold text-slate-800 capitalize">{activeTab}</h2>
-                                <p className="text-slate-500 mt-1">Dati aggiornati in tempo reale dal backend Google.</p>
+                                <h1 className="text-3xl font-black text-slate-800 capitalize tracking-tight">{activeTab}</h1>
+                                <p className="text-slate-500 font-medium">Gestione dati analitici Fidia Pharma</p>
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 bg-white p-2 rounded-2xl shadow-sm border border-slate-100">
                                 <select 
                                     value={selectedYear} 
                                     onChange={e => setSelectedYear(e.target.value)}
-                                    className="bg-white border-slate-200 border px-4 py-2 rounded-xl font-bold text-sm shadow-sm outline-none"
+                                    className="bg-transparent border-none px-4 py-2 font-bold text-slate-700 outline-none"
                                 >
-                                    {['Tutti', ...YEARS].map(y => <option key={y} value={y}>{y}</option>)}
+                                    <option value="all">Storico Completo</option>
+                                    {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
                                 </select>
-                                <button onClick={fetchData} className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 shadow-sm">🔄</button>
+                                <button onClick={loadData} className="p-2 hover:bg-slate-50 rounded-xl transition-all text-indigo-600">🔄</button>
                             </div>
-                        </div>
+                        </header>
 
                         {/* DASHBOARD */}
                         {activeTab === 'dashboard' && (
-                            <div className="space-y-8 animate-in fade-in duration-500">
+                            <div className="space-y-10 animate-fade-in">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="bg-indigo-600 p-8 rounded-[2rem] text-white shadow-xl shadow-indigo-100">
-                                        <p className="opacity-80 text-sm font-medium">Fatture Totali</p>
-                                        <h3 className="text-4xl font-black mt-1">{invoices.length}</h3>
+                                    <div className="bg-indigo-600 p-8 rounded-[2.5rem] text-white shadow-2xl shadow-indigo-200">
+                                        <p className="text-indigo-100 text-sm font-bold uppercase tracking-wider">Costo Reale Totale</p>
+                                        <h3 className="text-4xl font-black mt-2">€ {stats.totalInvested.toLocaleString('it-IT', {minimumFractionDigits: 2})}</h3>
                                     </div>
-                                    <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm card-hover">
-                                        <p className="text-slate-500 text-sm font-medium">Prodotti in Catalogo</p>
-                                        <h3 className="text-4xl font-black text-slate-800 mt-1">{PRODUCTS.length}</h3>
+                                    <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 card-hover">
+                                        <p className="text-slate-400 text-sm font-bold uppercase tracking-wider">Incasso Potenziale</p>
+                                        <h3 className="text-4xl font-black text-slate-800 mt-2">€ {stats.totalPotential.toLocaleString('it-IT', {minimumFractionDigits: 2})}</h3>
                                     </div>
-                                    <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm card-hover">
-                                        <p className="text-slate-500 text-sm font-medium">Anno Corrente</p>
-                                        <h3 className="text-4xl font-black text-indigo-600 mt-1">{new Date().getFullYear()}</h3>
+                                    <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 card-hover">
+                                        <p className="text-slate-400 text-sm font-bold uppercase tracking-wider">Margine Medio</p>
+                                        <div className="flex items-baseline gap-2 mt-2">
+                                            <h3 className={`text-4xl font-black ${stats.avgMargin > 25 ? 'text-green-500' : 'text-amber-500'}`}>{stats.avgMargin.toFixed(1)}%</h3>
+                                            <span className="text-slate-300 font-bold">ROI</span>
+                                        </div>
                                     </div>
                                 </div>
 
                                 <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
                                     <div className="p-8 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                        <h4 className="text-xl font-black text-slate-800">Analisi Redditività</h4>
-                                        <div className="relative">
+                                        <h4 className="text-xl font-black text-slate-800">Dettaglio Prodotti</h4>
+                                        <div className="relative group">
+                                            <Icons.Search />
                                             <input 
                                                 type="text" 
-                                                placeholder="Cerca prodotto..." 
-                                                className="pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm w-full md:w-64 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                placeholder="Cerca un prodotto..." 
+                                                className="pl-10 pr-6 py-3 bg-slate-50 border-none rounded-2xl text-sm w-full md:w-80 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                                                 onChange={e => setSearchTerm(e.target.value)}
                                             />
-                                            <svg className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><Icons.Search /></div>
                                         </div>
                                     </div>
                                     
@@ -230,33 +282,34 @@
                                         <table className="w-full text-left">
                                             <thead>
                                                 <tr className="bg-slate-50 text-slate-400 text-[10px] uppercase tracking-widest font-black">
-                                                    <th className="px-8 py-4">Prodotto</th>
-                                                    <th className="px-8 py-4">Pezzi</th>
-                                                    <th className="px-8 py-4">Costo Reale (IVA Incl.)</th>
-                                                    <th className="px-8 py-4">Prezzo Online</th>
-                                                    <th className="px-8 py-4">Margine %</th>
+                                                    <th className="px-8 py-5">Prodotto</th>
+                                                    <th className="px-8 py-5">Qtà Venduta</th>
+                                                    <th className="px-8 py-5">Costo Reale</th>
+                                                    <th className="px-8 py-5">Prezzo Online</th>
+                                                    <th className="px-8 py-5">Margine</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-50">
                                                 {Object.entries(analysis)
-                                                    .filter(([name]) => name.toLowerCase().includes(searchTerm.toLowerCase()))
+                                                    .filter(([name, d]) => name.toLowerCase().includes(searchTerm.toLowerCase()) && d.qty > 0)
+                                                    .sort((a,b) => b[1].qty - a[1].qty)
                                                     .map(([name, data]) => (
                                                     <tr key={name} className="group hover:bg-slate-50/50 transition-colors">
-                                                        <td className="px-8 py-5 font-bold text-slate-700">{name}</td>
-                                                        <td className="px-8 py-5 text-slate-500 font-medium">{data.qty}</td>
-                                                        <td className="px-8 py-5 font-semibold text-slate-900">€ {data.avgCost.toFixed(2)}</td>
-                                                        <td className="px-8 py-5 font-semibold text-indigo-600">€ {data.online.toFixed(2)}</td>
-                                                        <td className="px-8 py-5">
-                                                            <div className="flex items-center gap-3">
-                                                                <span className={`text-sm font-black ${data.margin > 25 ? 'text-green-500' : data.margin > 10 ? 'text-amber-500' : 'text-red-500'}`}>
-                                                                    {data.margin.toFixed(1)}%
-                                                                </span>
-                                                                <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                                        <td className="px-8 py-6">
+                                                            <span className="font-bold text-slate-700 block">{name}</span>
+                                                        </td>
+                                                        <td className="px-8 py-6 text-slate-500 font-bold">{data.qty} <span className="text-[10px] opacity-50">PZ</span></td>
+                                                        <td className="px-8 py-6 font-bold text-slate-900">€ {data.avgCost.toFixed(2)}</td>
+                                                        <td className="px-8 py-6 font-bold text-indigo-600">€ {data.online.toFixed(2)}</td>
+                                                        <td className="px-8 py-6">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden hidden sm:block">
                                                                     <div 
-                                                                        className={`h-full rounded-full ${data.margin > 25 ? 'bg-green-500' : data.margin > 10 ? 'bg-amber-500' : 'bg-red-500'}`}
+                                                                        className={`h-full rounded-full transition-all duration-1000 ${data.margin > 25 ? 'bg-green-500' : data.margin > 15 ? 'bg-amber-500' : 'bg-red-500'}`}
                                                                         style={{width: `${Math.max(0, Math.min(100, data.margin))}%`}}
                                                                     ></div>
                                                                 </div>
+                                                                <span className={`font-black text-sm ${data.margin > 25 ? 'text-green-500' : 'text-amber-500'}`}>{data.margin.toFixed(1)}%</span>
                                                             </div>
                                                         </td>
                                                     </tr>
@@ -270,18 +323,33 @@
 
                         {/* PREZZI ONLINE */}
                         {activeTab === 'prices' && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in slide-in-from-bottom-4 duration-500">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in">
                                 {PRODUCTS.map(prod => (
-                                    <div key={prod} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-2">
-                                        <label className="text-xs font-black text-slate-400 uppercase">{prod}</label>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-slate-400 font-bold">€</span>
+                                    <div key={prod} className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm card-hover flex flex-col gap-4">
+                                        <div className="flex justify-between items-start">
+                                            <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Update Price</span>
+                                            <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                                        </div>
+                                        <label className="text-lg font-bold text-slate-800 truncate">{prod}</label>
+                                        <div className="relative">
+                                            <span className="absolute left-0 top-1/2 -translate-y-1/2 text-slate-300 font-black text-xl">€</span>
                                             <input 
                                                 type="number"
                                                 value={onlinePrices[prod] || ''}
-                                                onChange={e => handlePriceChange(prod, e.target.value)}
+                                                onChange={e => {
+                                                    const val = e.target.value;
+                                                    setOnlinePrices(prev => ({...prev, [prod]: val}));
+                                                    if (priceTimerRef.current) clearTimeout(priceTimerRef.current);
+                                                    priceTimerRef.current = setTimeout(() => {
+                                                        fetch(SCRIPT_URL, {
+                                                            method: 'POST',
+                                                            mode: 'no-cors',
+                                                            body: JSON.stringify({ action: 'saveOnlinePrice', product: prod, price: parseFloat(val) || 0, password: localStorage.getItem('fidiaAppPassword') })
+                                                        });
+                                                    }, 1500);
+                                                }}
                                                 placeholder="0.00"
-                                                className="w-full text-lg font-bold outline-none border-b-2 border-transparent focus:border-indigo-500 transition-colors"
+                                                className="w-full pl-8 py-2 text-2xl font-black text-slate-800 outline-none border-b-2 border-slate-50 focus:border-indigo-500 transition-all"
                                             />
                                         </div>
                                     </div>
@@ -289,15 +357,11 @@
                             </div>
                         )}
 
-                        {/* STORICO (Placeholder elegante) */}
-                        {activeTab === 'history' && (
-                            <div className="bg-white rounded-[2.5rem] p-12 text-center border border-dashed border-slate-200">
-                                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                                    <Icons.History />
-                                </div>
-                                <h3 className="text-xl font-bold text-slate-800">Storico Documenti</h3>
-                                <p className="text-slate-500 mt-2 max-w-sm mx-auto">Qui potrai visualizzare l'elenco completo delle fatture e delle note di credito archiviate nel database.</p>
-                                <button onClick={() => setActiveTab('dashboard')} className="mt-8 text-indigo-600 font-bold hover:underline">Torna alla Dashboard</button>
+                        {/* PLACEHOLDER PER ALTRE TAB */}
+                        {(activeTab === 'invoices' || activeTab === 'credits') && (
+                            <div className="bg-white p-20 rounded-[3rem] border-2 border-dashed border-slate-100 text-center animate-fade-in">
+                                <p className="text-slate-400 font-bold italic">Interfaccia di inserimento {activeTab} in arrivo...</p>
+                                <p className="text-xs text-slate-300 mt-2 uppercase tracking-widest font-black">Usa la Dashboard per visualizzare l'analisi corrente</p>
                             </div>
                         )}
                     </main>
