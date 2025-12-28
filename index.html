@@ -27,7 +27,7 @@
         const YEARS = ['2019', '2020', '2021', '2022', '2023', '2024', '2025', '2026'];
         
         const SHEET_ID = '1FvExAXdbcPeA3vowfpVm1D4IO68GYF4s5GpzesvAJu8';
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxwEws6PFs5lkvbmYJrBkpTNs29LrmCSF0xaVUfwHBrO4FcOjCKIPBQmMxPZzvmMs7x/exec';
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzWNF1IztITgiIVocJW7t09ijrmYQOz8R1RekoEstss8S-d8_8Ylopv8S-EZOprVD99/exec';
         
         function App() {
           const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -69,9 +69,17 @@
           const loadFromGoogleSheets = async (pwd = savedPassword) => {
             setIsLoading(true);
             try {
+              console.log('📡 Caricamento dati da:', SCRIPT_URL);
               const response = await fetch(SCRIPT_URL);
-              if (!response.ok) throw new Error('Errore server');
+              console.log('📥 Risposta ricevuta:', response.status, response.statusText);
+              
+              if (!response.ok) {
+                console.error('❌ Risposta non OK:', response.status);
+                throw new Error(`Errore server: ${response.status}`);
+              }
+              
               const data = await response.json();
+              console.log('✅ Dati ricevuti:', data);
               
               const invoiceMap = {};
               (data.invoices || []).forEach(row => {
@@ -106,9 +114,10 @@
               setInvoices(Object.values(invoiceMap));
               setCreditNotes(data.creditNotes || []);
               setOnlinePrices(data.onlinePrices || {});
+              console.log('✅ Dati caricati con successo');
             } catch (error) {
-              console.error('Errore caricamento:', error);
-              alert('Errore nel caricamento dei dati');
+              console.error('❌ Errore caricamento completo:', error);
+              alert('Errore nel caricamento dei dati: ' + error.message);
             }
             setIsLoading(false);
           };
