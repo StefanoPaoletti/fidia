@@ -11,9 +11,13 @@
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-        .glass-effect { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); }
-        .sidebar-item-active { border-right: 4px solid #4f46e5; background: linear-gradient(90deg, rgba(79, 70, 229, 0.1) 0%, rgba(255, 255, 255, 0) 100%); }
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .sidebar-active { border-right: 4px solid #4f46e5; background: linear-gradient(90deg, rgba(79, 70, 229, 0.08) 0%, rgba(255, 255, 255, 0) 100%); color: #4f46e5; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .card-hover { transition: all 0.2s ease; }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
     </style>
 </head>
 <body>
@@ -22,247 +26,238 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // Estensione icone SVG in componenti
-        const Icon = {
-            Dashboard: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v12a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2z" /></svg>,
-            Invoice: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
-            Credit: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12z" /></svg>,
-            Price: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
-        };
+        // Nuova URL fornita
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzWNF1IztITgiIVocJW7t09ijrmYQOz8R1RekoEstss8S-d8_8Ylopv8S-EZOprVD99/exec';
+        
+        const PRODUCTS = [
+            'BLU GEL', 'BLU YAL', 'IRIDIUM GARZE', 'LACRISEK', 'LUTEINOMEGA', 'MERAMIRT', 
+            'MERAMIRT CM', 'MERAMIRT XG', 'MYRIALEN GEL', 'OPTO CARE', 'OPTO GEL', 
+            'OPTO IDRO', 'OPTO MYO', 'OPTO OMEGA', 'OPTO RED', 'OPTO RELAX', 
+            'OPTO SOL', 'OPTO VITREO', 'OPTO YAL', 'OPTO YAL CREAM', 'PROLENS', 
+            'RESPILENS 100', 'RESPILENS 360', 'TRIUM', 'VITREOXIGEN'
+        ].sort();
 
-        const PRODUCTS = ['PROLENS', 'OPTO RED', 'OPTO SOL', 'OPTO YAL', 'OPTO YAL CREAM', 'OPTO GEL', 'OPTO IDRO', 'OPTO RELAX', 'OPTO VITREO', 'RESPILENS 100', 'RESPILENS 360', 'OPTO CARE', 'OPTO MYO', 'OPTO OMEGA', 'BLU GEL', 'BLU YAL', 'IRIDIUM GARZE', 'TRIUM', 'VITREOXIGEN', 'LUTEINOMEGA', 'MERAMIRT', 'MYRIALEN GEL', 'MERAMIRT CM', 'MERAMIRT XG', 'LACRISEK'].sort();
         const YEARS = ['2023', '2024', '2025', '2026'];
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxwEws6PFs5lkvbmYJrBkpTNs29LrmCSF0xaVUfwHBrO4FcOjCKIPBQmMxPZzvmMs7x/exec';
+
+        // Componenti Icone
+        const Icons = {
+            Chart: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>,
+            Plus: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>,
+            Tag: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>,
+            History: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
+            Save: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+        };
 
         function App() {
             const [isAuthenticated, setIsAuthenticated] = useState(false);
-            const [password, setPassword] = useState('');
             const [activeTab, setActiveTab] = useState('dashboard');
-            const [invoices, setInvoices] = useState([]);
-            const [creditNotes, setCreditNotes] = useState([]);
-            const [onlinePrices, setOnlinePrices] = useState({});
-            const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
             const [isLoading, setIsLoading] = useState(false);
             const [searchTerm, setSearchTerm] = useState('');
+            const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+            
+            // Dati
+            const [invoices, setInvoices] = useState([]);
+            const [onlinePrices, setOnlinePrices] = useState({});
+            const priceTimerRef = useRef(null);
 
-            // Gestione dati (stessa logica del file precedente)
             useEffect(() => {
-                const stored = localStorage.getItem('fidiaAppPassword');
-                if (stored) { setIsAuthenticated(true); loadData(); }
+                const pass = localStorage.getItem('fidia_auth');
+                if (pass) { setIsAuthenticated(true); fetchData(); }
             }, []);
 
-            const loadData = async () => {
+            const fetchData = async () => {
                 setIsLoading(true);
                 try {
-                    const response = await fetch(SCRIPT_URL);
-                    const data = await response.json();
-                    
-                    // Normalizzazione fatture (id unico)
-                    const invMap = {};
-                    (data.invoices || []).forEach(row => {
-                        if(!invMap[row.id]) invMap[row.id] = {...row, items: []};
-                        invMap[row.id].items.push(row);
-                    });
-                    
-                    setInvoices(Object.values(invMap));
-                    setCreditNotes(data.creditNotes || []);
+                    const res = await fetch(SCRIPT_URL);
+                    const data = await res.json();
+                    setInvoices(data.invoices || []);
                     setOnlinePrices(data.onlinePrices || {});
-                } catch (e) { alert("Errore connessione"); }
+                } catch (e) { console.error("Errore caricamento", e); }
                 setIsLoading(false);
             };
 
             const analysis = useMemo(() => {
-                const result = {};
-                const filtered = selectedYear === 'all' ? invoices : invoices.filter(i => String(i.year) === selectedYear);
-                
-                // Logica di calcolo ottimizzata (come suggerito prima)
-                PRODUCTS.forEach(p => {
-                    const prodInvoices = filtered.filter(inv => inv.items.some(it => it.product === p));
-                    let totalQty = 0, totalCost = 0;
+                const results = {};
+                const filteredInvoices = selectedYear === 'Tutti' ? invoices : invoices.filter(inv => String(inv.year) === selectedYear);
 
-                    prodInvoices.forEach(inv => {
-                        const row = inv.items.find(it => it.product === p);
-                        const q = parseFloat(row.quantity) || 0;
-                        const f = parseFloat(row.freebies) || 0;
-                        const net = parseFloat(row.priceNet) || 0;
-                        const vat = parseFloat(row.vat) || 10;
+                PRODUCTS.forEach(prod => {
+                    const rows = filteredInvoices.filter(r => r.product === prod);
+                    let totalQty = 0, totalNetCost = 0;
+
+                    rows.forEach(r => {
+                        const q = parseFloat(r.quantity) || 0;
+                        const f = parseFloat(r.freebies) || 0;
+                        const price = parseFloat(r.priceNet) || 0;
+                        const vat = parseFloat(r.vat) || 10;
                         
                         totalQty += (q + f);
-                        totalCost += (q * net * (1 + vat/100));
+                        totalNetCost += (q * price * (1 + vat/100));
                     });
 
-                    const avg = totalQty > 0 ? totalCost / totalQty : 0;
-                    const online = onlinePrices[p] || 0;
-                    result[p] = { 
-                        avgRealCost: avg, 
-                        onlinePrice: online, 
-                        margin: online > 0 ? ((online - avg) / online) * 100 : 0,
-                        totalQuantity: totalQty
+                    const avgCost = totalQty > 0 ? totalNetCost / totalQty : 0;
+                    const online = onlinePrices[prod] || 0;
+                    
+                    results[prod] = {
+                        avgCost,
+                        online,
+                        margin: online > 0 ? ((online - avgCost) / online) * 100 : 0,
+                        qty: totalQty
                     };
                 });
-                return result;
+                return results;
             }, [invoices, onlinePrices, selectedYear]);
 
-            const filteredAnalysis = Object.entries(analysis).filter(([name]) => 
-                name.toLowerCase().includes(searchTerm.toLowerCase()) && analysis[name].totalQuantity > 0
-            );
+            const handlePriceChange = (prod, val) => {
+                const newPrices = { ...onlinePrices, [prod]: parseFloat(val) || 0 };
+                setOnlinePrices(newPrices);
+
+                if (priceTimerRef.current) clearTimeout(priceTimerRef.current);
+                priceTimerRef.current = setTimeout(async () => {
+                    await fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        body: JSON.stringify({ type: 'UPDATE_PRICES', prices: newPrices })
+                    });
+                }, 1500);
+            };
 
             if (!isAuthenticated) return (
-                <div className="min-h-screen flex items-center justify-center bg-slate-900 p-6">
-                    <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8">
-                        <div className="text-center mb-8">
-                            <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full mb-4">
-                                <Icon.Dashboard />
-                            </div>
-                            <h1 className="text-2xl font-bold text-slate-800">Fidia Analytics</h1>
-                            <p className="text-slate-500">Inserisci le credenziali per accedere</p>
-                        </div>
+                <div className="min-h-screen flex items-center justify-center bg-slate-900">
+                    <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md">
+                        <h2 className="text-2xl font-bold text-center mb-6">Fidia Analytics Login</h2>
                         <input 
                             type="password" 
-                            className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none mb-4"
-                            placeholder="Password di accesso"
-                            onKeyDown={e => e.key === 'Enter' && (localStorage.setItem('fidiaAppPassword', e.target.value), setIsAuthenticated(true), loadData())}
+                            placeholder="Password" 
+                            className="w-full p-4 border rounded-xl mb-4 outline-none focus:ring-2 focus:ring-indigo-500"
+                            onKeyDown={e => e.key === 'Enter' && (localStorage.setItem('fidia_auth', 'ok'), setIsAuthenticated(true), fetchData())}
                         />
                         <button 
-                            onClick={() => { const p = document.querySelector('input').value; localStorage.setItem('fidiaAppPassword', p); setIsAuthenticated(true); loadData(); }}
-                            className="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
+                            onClick={() => { localStorage.setItem('fidia_auth', 'ok'); setIsAuthenticated(true); fetchData(); }}
+                            className="w-full bg-indigo-600 text-white p-4 rounded-xl font-bold hover:bg-indigo-700 transition-all"
                         >
-                            Accedi al Sistema
+                            Entra nell'area Pro
                         </button>
                     </div>
                 </div>
             );
 
             return (
-                <div className="min-h-screen flex">
+                <div className="min-h-screen flex bg-slate-50">
                     {/* SIDEBAR */}
-                    <aside className="w-64 bg-white border-r border-slate-200 hidden lg:flex flex-col fixed h-full">
-                        <div className="p-6 border-b border-slate-100">
-                            <h2 className="text-xl font-bold text-indigo-600">Fidia Pro</h2>
-                            <p className="text-xs text-slate-400 font-medium">MANAGEMENT SYSTEM</p>
+                    <aside className="w-72 bg-white border-r border-slate-200 hidden lg:flex flex-col sticky top-0 h-screen">
+                        <div className="p-8 border-b border-slate-100">
+                            <h1 className="text-2xl font-black text-indigo-600 tracking-tighter">FIDIA ANALYTICS</h1>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Management Tool v2.0</p>
                         </div>
-                        <nav className="flex-1 p-4 space-y-2">
+                        
+                        <nav className="flex-1 p-4 space-y-2 mt-4">
                             {[
-                                { id: 'dashboard', label: 'Dashboard', icon: <Icon.Dashboard /> },
-                                { id: 'invoices', label: 'Fatture', icon: <Icon.Invoice /> },
-                                { id: 'credits', label: 'Note Credito', icon: <Icon.Credit /> },
-                                { id: 'prices', label: 'Prezzi Online', icon: <Icon.Price /> },
+                                { id: 'dashboard', label: 'Dashboard', icon: <Icons.Chart /> },
+                                { id: 'prices', label: 'Prezzi Online', icon: <Icons.Tag /> },
+                                { id: 'history', label: 'Storico Fatture', icon: <Icons.History /> },
                             ].map(item => (
                                 <button 
                                     key={item.id}
                                     onClick={() => setActiveTab(item.id)}
-                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${activeTab === item.id ? 'sidebar-item-active text-indigo-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                                    className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold text-sm transition-all ${activeTab === item.id ? 'sidebar-active shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
                                 >
                                     {item.icon} {item.label}
                                 </button>
                             ))}
                         </nav>
-                        <div className="p-4 border-t border-slate-100">
-                            <button onClick={() => {localStorage.clear(); location.reload();}} className="w-full text-left px-4 py-3 text-sm text-red-500 font-medium hover:bg-red-50 rounded-xl transition-all">
-                                🔌 Disconnetti
+
+                        <div className="p-6 border-t border-slate-100">
+                            <button onClick={() => {localStorage.clear(); location.reload();}} className="flex items-center gap-2 text-red-500 font-bold text-sm hover:opacity-70">
+                                <span>Logout</span>
                             </button>
                         </div>
                     </aside>
 
-                    {/* MAIN CONTENT */}
-                    <main className="flex-1 lg:ml-64 p-4 lg:p-10">
+                    {/* MAIN */}
+                    <main className="flex-1 p-6 lg:p-12 max-w-7xl mx-auto w-full">
                         {isLoading && <div className="fixed top-0 left-0 w-full h-1 bg-indigo-600 animate-pulse z-50"></div>}
                         
-                        {/* HEADER DASHBOARD */}
-                        <header className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
                             <div>
-                                <h1 className="text-2xl lg:text-3xl font-bold text-slate-800 tracking-tight">
-                                    {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
-                                </h1>
-                                <p className="text-slate-500">Analisi e gestione dati in tempo reale</p>
+                                <h2 className="text-3xl font-extrabold text-slate-800 capitalize">{activeTab}</h2>
+                                <p className="text-slate-500 mt-1">Dati aggiornati in tempo reale dal backend Google.</p>
                             </div>
                             <div className="flex items-center gap-3">
                                 <select 
                                     value={selectedYear} 
                                     onChange={e => setSelectedYear(e.target.value)}
-                                    className="bg-white border border-slate-200 px-4 py-2 rounded-lg text-sm font-medium shadow-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                    className="bg-white border-slate-200 border px-4 py-2 rounded-xl font-bold text-sm shadow-sm outline-none"
                                 >
-                                    {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                                    {['Tutti', ...YEARS].map(y => <option key={y} value={y}>{y}</option>)}
                                 </select>
-                                <button onClick={loadData} className="p-2 bg-white border border-slate-200 rounded-lg shadow-sm hover:bg-slate-50">
-                                    🔄
-                                </button>
+                                <button onClick={fetchData} className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 shadow-sm">🔄</button>
                             </div>
-                        </header>
+                        </div>
 
-                        {/* DASHBOARD VIEW */}
+                        {/* DASHBOARD */}
                         {activeTab === 'dashboard' && (
                             <div className="space-y-8 animate-in fade-in duration-500">
-                                {/* STATS CARDS */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                                        <p className="text-sm font-medium text-slate-500 mb-1">Margine Medio Periodo</p>
-                                        <div className="flex items-end gap-2">
-                                            <span className="text-3xl font-bold text-slate-900">28.4%</span>
-                                            <span className="text-green-500 text-sm font-bold mb-1">↑ 2.1%</span>
-                                        </div>
+                                    <div className="bg-indigo-600 p-8 rounded-[2rem] text-white shadow-xl shadow-indigo-100">
+                                        <p className="opacity-80 text-sm font-medium">Fatture Totali</p>
+                                        <h3 className="text-4xl font-black mt-1">{invoices.length}</h3>
                                     </div>
-                                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                                        <p className="text-sm font-medium text-slate-500 mb-1">Volume Prodotti</p>
-                                        <div className="flex items-end gap-2">
-                                            <span className="text-3xl font-bold text-slate-900">
-                                                {Object.values(analysis).reduce((a,b) => a + b.totalQuantity, 0)}
-                                            </span>
-                                            <span className="text-slate-400 text-sm mb-1">Pezzi tot.</span>
-                                        </div>
+                                    <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm card-hover">
+                                        <p className="text-slate-500 text-sm font-medium">Prodotti in Catalogo</p>
+                                        <h3 className="text-4xl font-black text-slate-800 mt-1">{PRODUCTS.length}</h3>
                                     </div>
-                                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                                        <p className="text-sm font-medium text-slate-500 mb-1">Fatture Archiviate</p>
-                                        <div className="flex items-end gap-2">
-                                            <span className="text-3xl font-bold text-slate-900">{invoices.length}</span>
-                                            <span className="text-indigo-500 text-sm font-bold mb-1">Record</span>
-                                        </div>
+                                    <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm card-hover">
+                                        <p className="text-slate-500 text-sm font-medium">Anno Corrente</p>
+                                        <h3 className="text-4xl font-black text-indigo-600 mt-1">{new Date().getFullYear()}</h3>
                                     </div>
                                 </div>
 
-                                {/* TABELLA PRINCIPALE */}
-                                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                                    <div className="p-6 border-b border-slate-50 flex items-center justify-between">
-                                        <h3 className="font-bold text-slate-800">Analisi Margini per Prodotto</h3>
-                                        <input 
-                                            type="text" 
-                                            placeholder="Cerca prodotto..." 
-                                            className="px-4 py-2 bg-slate-50 border-none rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 w-64"
-                                            onChange={e => setSearchTerm(e.target.value)}
-                                        />
+                                <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
+                                    <div className="p-8 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                        <h4 className="text-xl font-black text-slate-800">Analisi Redditività</h4>
+                                        <div className="relative">
+                                            <input 
+                                                type="text" 
+                                                placeholder="Cerca prodotto..." 
+                                                className="pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm w-full md:w-64 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                onChange={e => setSearchTerm(e.target.value)}
+                                            />
+                                            <svg className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                        </div>
                                     </div>
-                                    <div className="overflow-x-auto">
+                                    
+                                    <div className="overflow-x-auto custom-scrollbar">
                                         <table className="w-full text-left">
-                                            <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-bold">
-                                                <tr>
-                                                    <th className="px-6 py-4">Prodotto</th>
-                                                    <th className="px-6 py-4">Costo Reale</th>
-                                                    <th className="px-6 py-4">Prezzo Online</th>
-                                                    <th className="px-6 py-4">Margine</th>
-                                                    <th className="px-6 py-4 text-center">Status</th>
+                                            <thead>
+                                                <tr className="bg-slate-50 text-slate-400 text-[10px] uppercase tracking-widest font-black">
+                                                    <th className="px-8 py-4">Prodotto</th>
+                                                    <th className="px-8 py-4">Pezzi</th>
+                                                    <th className="px-8 py-4">Costo Reale (IVA Incl.)</th>
+                                                    <th className="px-8 py-4">Prezzo Online</th>
+                                                    <th className="px-8 py-4">Margine %</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-slate-100">
-                                                {filteredAnalysis.map(([name, data]) => (
-                                                    <tr key={name} className="hover:bg-slate-50 transition-colors">
-                                                        <td className="px-6 py-4 font-semibold text-slate-700">{name}</td>
-                                                        <td className="px-6 py-4 text-slate-600">€ {data.avgRealCost.toFixed(2)}</td>
-                                                        <td className="px-6 py-4 text-slate-600 font-medium">€ {data.onlinePrice.toFixed(2)}</td>
-                                                        <td className="px-6 py-4">
+                                            <tbody className="divide-y divide-slate-50">
+                                                {Object.entries(analysis)
+                                                    .filter(([name]) => name.toLowerCase().includes(searchTerm.toLowerCase()))
+                                                    .map(([name, data]) => (
+                                                    <tr key={name} className="group hover:bg-slate-50/50 transition-colors">
+                                                        <td className="px-8 py-5 font-bold text-slate-700">{name}</td>
+                                                        <td className="px-8 py-5 text-slate-500 font-medium">{data.qty}</td>
+                                                        <td className="px-8 py-5 font-semibold text-slate-900">€ {data.avgCost.toFixed(2)}</td>
+                                                        <td className="px-8 py-5 font-semibold text-indigo-600">€ {data.online.toFixed(2)}</td>
+                                                        <td className="px-8 py-5">
                                                             <div className="flex items-center gap-3">
-                                                                <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden min-w-[60px]">
+                                                                <span className={`text-sm font-black ${data.margin > 25 ? 'text-green-500' : data.margin > 10 ? 'text-amber-500' : 'text-red-500'}`}>
+                                                                    {data.margin.toFixed(1)}%
+                                                                </span>
+                                                                <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                                                                     <div 
-                                                                        className={`h-full rounded-full ${data.margin > 30 ? 'bg-green-500' : data.margin > 15 ? 'bg-amber-500' : 'bg-red-500'}`}
-                                                                        style={{width: `${Math.min(100, Math.max(0, data.margin))}%`}}
+                                                                        className={`h-full rounded-full ${data.margin > 25 ? 'bg-green-500' : data.margin > 10 ? 'bg-amber-500' : 'bg-red-500'}`}
+                                                                        style={{width: `${Math.max(0, Math.min(100, data.margin))}%`}}
                                                                     ></div>
                                                                 </div>
-                                                                <span className="font-bold text-slate-800">{data.margin.toFixed(1)}%</span>
                                                             </div>
-                                                        </td>
-                                                        <td className="px-6 py-4 text-center">
-                                                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${data.margin > 30 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                                {data.margin > 30 ? 'Ottimo' : 'Revisionare'}
-                                                            </span>
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -273,11 +268,36 @@
                             </div>
                         )}
 
-                        {/* ... Altre Tab (Invoices, Credits, Prices) avranno la stessa estetica pulita ... */}
-                        {activeTab !== 'dashboard' && (
-                            <div className="bg-white p-12 rounded-3xl border-2 border-dashed border-slate-200 text-center">
-                                <p className="text-slate-400 font-medium italic">Sezione {activeTab} in fase di caricamento stilistico...</p>
-                                <p className="text-xs text-slate-300 mt-2">Usa la Dashboard per visualizzare i dati attuali.</p>
+                        {/* PREZZI ONLINE */}
+                        {activeTab === 'prices' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in slide-in-from-bottom-4 duration-500">
+                                {PRODUCTS.map(prod => (
+                                    <div key={prod} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-2">
+                                        <label className="text-xs font-black text-slate-400 uppercase">{prod}</label>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-slate-400 font-bold">€</span>
+                                            <input 
+                                                type="number"
+                                                value={onlinePrices[prod] || ''}
+                                                onChange={e => handlePriceChange(prod, e.target.value)}
+                                                placeholder="0.00"
+                                                className="w-full text-lg font-bold outline-none border-b-2 border-transparent focus:border-indigo-500 transition-colors"
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* STORICO (Placeholder elegante) */}
+                        {activeTab === 'history' && (
+                            <div className="bg-white rounded-[2.5rem] p-12 text-center border border-dashed border-slate-200">
+                                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                                    <Icons.History />
+                                </div>
+                                <h3 className="text-xl font-bold text-slate-800">Storico Documenti</h3>
+                                <p className="text-slate-500 mt-2 max-w-sm mx-auto">Qui potrai visualizzare l'elenco completo delle fatture e delle note di credito archiviate nel database.</p>
+                                <button onClick={() => setActiveTab('dashboard')} className="mt-8 text-indigo-600 font-bold hover:underline">Torna alla Dashboard</button>
                             </div>
                         )}
                     </main>
