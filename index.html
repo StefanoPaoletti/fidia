@@ -51,7 +51,7 @@
           const [editingInvoice, setEditingInvoice] = useState(null);
           
           // Form nota credito
-          const [creditYear, setCreditYear] = useState(new Date().getFullYear().toString());
+          const [creditDate, setCreditDate] = useState(new Date().toISOString().split('T')[0]);
           const [creditAmount, setCreditAmount] = useState('');
           
           // Timer per prezzi online
@@ -238,6 +238,7 @@
           
           const startEditInvoice = (invoice) => {
             setEditingInvoice(invoice);
+            // Usa direttamente la stringa data senza conversioni per evitare problemi timezone
             setInvoiceDate(invoice.date);
             setInvoiceNumber(invoice.number);
             setShippingCost(invoice.shippingCost || '');
@@ -254,14 +255,17 @@
           
           const saveCreditNote = async () => {
             if (!creditAmount || parseFloat(creditAmount) <= 0) return alert('Inserisci un importo valido');
+            const year = new Date(creditDate).getFullYear();
             const newNote = {
               id: Date.now(),
-              year: creditYear,
+              year: year,
+              date: creditDate,
               amount: parseFloat(creditAmount)
             };
             const success = await saveToGoogleSheets('saveCreditNote', newNote);
             if (success) {
               setCreditAmount('');
+              setCreditDate(new Date().toISOString().split('T')[0]);
               alert('Nota di credito salvata!');
             }
           };
@@ -338,14 +342,41 @@
                 });
               });
               
-              // Note di credito proporzionali
-              const relevantCredits = selectedYear === 'all' ? creditNotes : creditNotes.filter(c => c.year === selectedYear);
-              const totalAllYearsCost = Object.values(yearCost).reduce((a, b) => a + b, 0);
+              // Note di credito proporzionali per anno
+              const relevantCredits = selectedYear === 'all' ? creditNotes : creditNotes.filter(c => String(c.year) === selectedYear);
               
               relevantCredits.forEach(c => {
-                if (yearCost[c.year] && totalAllYearsCost > 0) {
-                  const prop = yearCost[c.year] / totalAllYearsCost;
-                  yearCost[c.year] -= c.amount * prop;
+                const creditYear = String(c.year);
+                if (yearCost[creditYear]) {
+                  // Calcola il totale speso nell'anno della nota di credito per TUTTI i prodotti
+                  let totalYearCost = 0;
+                  PRODUCTS.forEach(p => {
+                    filteredInvoices.forEach(invoice => {
+                      if (String(invoice.year) !== creditYear) return;
+                      
+                      const totalPieces = invoice.items.reduce((sum, i) => sum + (parseFloat(i.quantity) || 0) + (parseFloat(i.freebies) || 0), 0);
+                      const shipping = parseFloat(invoice.shippingCost) || 0;
+                      
+                      invoice.items.forEach(item => {
+                        if (item.product !== p) return;
+                        const qty = parseFloat(item.quantity) || 0;
+                        const free = parseFloat(item.freebies) || 0;
+                        const netPrice = parseFloat(item.priceNet || item.price) || 0;
+                        const vat = parseFloat(item.vat) || 0;
+                        const totalQty = qty + free;
+                        const shippingShare = totalPieces > 0 ? (totalQty / totalPieces) * shipping : 0;
+                        const priceWithVAT = qty * netPrice * (1 + vat / 100);
+                        const shippingWithVAT = shippingShare * 1.22;
+                        totalYearCost += priceWithVAT + shippingWithVAT;
+                      });
+                    });
+                  });
+                  
+                  // Distribuisci la nota di credito proporzionalmente
+                  if (totalYearCost > 0) {
+                    const prop = yearCost[creditYear] / totalYearCost;
+                    yearCost[creditYear] -= c.amount * prop;
+                  }
                 }
               });
               
@@ -592,7 +623,7 @@
                         <table className="w-full text-sm">
                           <thead className="bg-gray-100">
                             <tr>
-                              <th className="px-4 py-3 text-left font-semibold">Qtà Pagata</th>
+                              <th className="px-4 py-3 text-left font-semibold">Quantità</th>
                               <th className="px-4 py-3 text-left font-semibold">Prodotto</th>
                               <th className="px-4 py-3 text-left font-semibold">Prezzo Unit. €</th>
                               <th className="px-4 py-3 text-left font-semibold">Sconto %</th>
@@ -708,7 +739,7 @@
                               <div className="text-sm text-gray-700 mt-2">
                                 {inv.items.map((it, idx) => (
                                   <div key={idx}>
-                                    • {it.product}: {it.quantity} pz + {it.freebies || 0} omaggi @ €{it.price} {it.discount > 0 && `(sconto ${it.discount}%)`}
+                                    • {it.product}: {it.quantity} pz + {it.freebies || 0} omaggi @ €{it.priceGross} {it.discount > 0 && `(sconto ${it.discount}%)`}
                                   </div>
                                 ))}
                               </div>
@@ -731,10 +762,8 @@
                       <h2 className="text-2xl font-bold mb-6">Nuova Nota di Credito</h2>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-lg">
                         <div>
-                          <label className="block text-sm font-medium mb-1">Anno</label>
-                          <select value={creditYear} onChange={e => setCreditYear(e.target.value)} className="w-full px-4 py-2 border rounded-lg">
-                            {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-                          </select>
+                          <label className="block text-sm font-medium mb-1">Data</label>
+                          <input type="date" value={creditDate} onChange={e => setCreditDate(e.target.value)} className="w-full px-4 py-2 border rounded-lg" />
                         </div>
                         <div>
                           <label className="block text-sm font-medium mb-1">Importo €</label>
@@ -749,9 +778,9 @@
                     <div className="bg-white rounded-lg shadow p-6">
                       <h2 className="text-2xl font-bold mb-4">Note di Credito ({creditNotes.length})</h2>
                       <div className="space-y-3">
-                        {creditNotes.slice().sort((a, b) => b.year - a.year).map(note => (
+                        {creditNotes.slice().sort((a, b) => (b.date || b.year).localeCompare(a.date || a.year)).map(note => (
                           <div key={note.id} className="border rounded-lg p-4 flex justify-between items-center hover:bg-gray-50">
-                            <div className="font-medium text-lg">{note.year} - € {note.amount.toFixed(2)}</div>
+                            <div className="font-medium text-lg">{note.date || note.year} - € {note.amount.toFixed(2)}</div>
                             <button onClick={() => deleteCreditNote(note.id)} disabled={isLoading} className="text-red-600 hover:text-red-800 text-2xl">🗑️</button>
                           </div>
                         ))}
