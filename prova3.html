@@ -338,10 +338,12 @@
           const exportDashboardImage = async () => {
             const el = document.getElementById('dashboard-table');
             const searchBar = document.getElementById('search-bar');
+            const infoIcons = document.querySelectorAll('.info-icon');
             if (!el) return alert('Errore: tabella non trovata');
             
-            // Nascondi la barra di ricerca temporaneamente
+            // Nascondi la barra di ricerca e le icone info temporaneamente
             if (searchBar) searchBar.style.display = 'none';
+            infoIcons.forEach(icon => icon.style.display = 'none');
             
             try {
               const canvas = await html2canvas(el, { backgroundColor: '#ffffff', scale: 2 });
@@ -355,8 +357,9 @@
             } catch (err) {
               alert('Errore esportazione immagine');
             } finally {
-              // Mostra di nuovo la barra di ricerca
+              // Mostra di nuovo la barra di ricerca e le icone info
               if (searchBar) searchBar.style.display = 'block';
+              infoIcons.forEach(icon => icon.style.display = 'block');
             }
           };
           
@@ -534,11 +537,11 @@
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                         <div className="flex items-center gap-2">
                           <h2 className="text-2xl font-bold text-gray-800">Analisi Margini</h2>
-                          <div className="relative group">
+                          <div className="relative group info-icon">
                             <svg className="w-6 h-6 text-gray-400 cursor-help" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
                             </svg>
-                            <div className="absolute left-1/2 -translate-x-1/2 top-8 hidden group-hover:block z-10 w-72 sm:w-80 px-4 py-3 text-sm text-white bg-gray-700 rounded-lg shadow-xl">
+                            <div className="absolute left-0 sm:left-1/2 sm:-translate-x-1/2 top-8 hidden group-hover:block z-10 w-72 sm:w-80 px-4 py-3 text-sm text-white bg-gray-700 rounded-lg shadow-xl">
                               <div className="mb-2">
                                 Il costo reale è calcolato come:<br/>
                                 (Prezzo netto × Quantità + Spese spedizione) ÷ Quantità totale (inclusi omaggi)
@@ -547,7 +550,7 @@
                                 <div>* COSTO REALE IVA inclusa</div>
                                 <div>* PREZZO ONLINE IVA inclusa</div>
                               </div>
-                              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-700 transform rotate-45"></div>
+                              <div className="absolute -top-1 left-2 sm:left-1/2 sm:-translate-x-1/2 w-2 h-2 bg-gray-700 transform rotate-45"></div>
                             </div>
                           </div>
                         </div>
@@ -599,13 +602,13 @@
                             <div className="bg-white rounded-lg shadow p-3 sm:p-5 border-l-4 border-orange-500">
                               <div className="flex items-center justify-between mb-1">
                                 <div className="text-xs sm:text-sm font-medium text-gray-600">Totale Fatture</div>
-                                <div className="relative group">
+                                <div className="relative group info-icon">
                                   <svg className="w-5 h-5 text-gray-400 cursor-help" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
                                   </svg>
-                                  <div className="absolute left-1/2 -translate-x-1/2 top-8 hidden group-hover:block z-10 w-56 sm:w-64 px-4 py-2.5 text-sm text-white bg-gray-700 rounded-lg shadow-xl">
+                                  <div className="absolute right-0 top-8 hidden group-hover:block z-10 w-56 sm:w-64 px-4 py-2.5 text-sm text-white bg-gray-700 rounded-lg shadow-xl">
                                     Totale delle fatture incluse aliquote e spese
-                                    <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-700 transform rotate-45"></div>
+                                    <div className="absolute -top-1 right-2 w-2 h-2 bg-gray-700 transform rotate-45"></div>
                                   </div>
                                 </div>
                               </div>
@@ -616,13 +619,13 @@
                             <div className="bg-white rounded-lg shadow p-3 sm:p-5 border-l-4 border-blue-500">
                               <div className="flex items-center justify-between mb-1">
                                 <div className="text-xs sm:text-sm font-medium text-gray-600">Incasso Potenziale</div>
-                                <div className="relative group">
+                                <div className="relative group info-icon">
                                   <svg className="w-5 h-5 text-gray-400 cursor-help" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
                                   </svg>
-                                  <div className="absolute left-1/2 -translate-x-1/2 top-8 hidden group-hover:block z-10 w-56 sm:w-64 px-4 py-2.5 text-sm text-white bg-gray-700 rounded-lg shadow-xl">
+                                  <div className="absolute right-0 top-8 hidden group-hover:block z-10 w-56 sm:w-64 px-4 py-2.5 text-sm text-white bg-gray-700 rounded-lg shadow-xl">
                                     Vendendo le quantità acquistate + omaggi al prezzo online
-                                    <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-700 transform rotate-45"></div>
+                                    <div className="absolute -top-1 right-2 w-2 h-2 bg-gray-700 transform rotate-45"></div>
                                   </div>
                                 </div>
                               </div>
@@ -645,13 +648,13 @@
                               <div className="bg-white rounded-lg shadow p-3 sm:p-5 border-l-4 border-emerald-500">
                                 <div className="flex items-center justify-between mb-1">
                                   <div className="text-xs sm:text-sm font-medium text-gray-600">Omaggi {selectedYear !== 'all' ? selectedYear : ''}</div>
-                                  <div className="relative group">
+                                  <div className="relative group info-icon">
                                     <svg className="w-5 h-5 text-gray-400 cursor-help" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
                                     </svg>
-                                    <div className="absolute left-1/2 -translate-x-1/2 top-8 hidden group-hover:block z-10 w-56 sm:w-64 px-4 py-2.5 text-sm text-white bg-gray-700 rounded-lg shadow-xl">
+                                    <div className="absolute right-0 top-8 hidden group-hover:block z-10 w-56 sm:w-64 px-4 py-2.5 text-sm text-white bg-gray-700 rounded-lg shadow-xl">
                                       Valore prezzo di fattura + aliquota
-                                      <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-700 transform rotate-45"></div>
+                                      <div className="absolute -top-1 right-2 w-2 h-2 bg-gray-700 transform rotate-45"></div>
                                     </div>
                                   </div>
                                 </div>
