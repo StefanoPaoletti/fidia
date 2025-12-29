@@ -596,7 +596,18 @@
                             
                             {/* INCASSO POTENZIALE */}
                             <div className="bg-white rounded-lg shadow p-3 sm:p-5 border-l-4 border-blue-500">
-                              <div className="text-xs sm:text-sm font-medium text-gray-600 mb-1">Incasso Potenziale</div>
+                              <div className="flex items-center justify-between mb-1">
+                                <div className="text-xs sm:text-sm font-medium text-gray-600">Incasso Potenziale</div>
+                                <div className="relative group">
+                                  <svg className="w-5 h-5 text-gray-400 cursor-help" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+                                  </svg>
+                                  <div className="absolute left-0 sm:left-auto sm:right-0 top-8 hidden group-hover:block z-10 w-56 sm:w-64 px-4 py-2.5 text-sm text-white bg-gray-700 rounded-lg shadow-xl">
+                                    Vendendo le quantità acquistate + omaggi al prezzo online
+                                    <div className="absolute -top-1 left-2 sm:left-auto sm:right-2 w-2 h-2 bg-gray-700 transform rotate-45"></div>
+                                  </div>
+                                </div>
+                              </div>
                               <div className="text-lg sm:text-2xl font-bold text-blue-600 break-words">€ {revenue.toFixed(2)}</div>
                             </div>
                             
@@ -614,7 +625,18 @@
                             {/* OMAGGI */}
                             {totalFree > 0 && (
                               <div className="bg-white rounded-lg shadow p-3 sm:p-5 border-l-4 border-emerald-500">
-                                <div className="text-xs sm:text-sm font-medium text-gray-600 mb-1">Omaggi {selectedYear !== 'all' ? selectedYear : ''}</div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <div className="text-xs sm:text-sm font-medium text-gray-600">Omaggi {selectedYear !== 'all' ? selectedYear : ''}</div>
+                                  <div className="relative group">
+                                    <svg className="w-5 h-5 text-gray-400 cursor-help" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+                                    </svg>
+                                    <div className="absolute left-0 sm:left-auto sm:right-0 top-8 hidden group-hover:block z-10 w-56 sm:w-64 px-4 py-2.5 text-sm text-white bg-gray-700 rounded-lg shadow-xl">
+                                      Valore prezzo di fattura + aliquota
+                                      <div className="absolute -top-1 left-2 sm:left-auto sm:right-2 w-2 h-2 bg-gray-700 transform rotate-45"></div>
+                                    </div>
+                                  </div>
+                                </div>
                                 <div className="text-lg sm:text-2xl font-bold text-emerald-600">{percOmaggi.toFixed(1)}%</div>
                                 <div className="text-xs text-gray-500 mt-1">
                                   {totalFree} pz • € {totalFreeValue.toFixed(2)}
