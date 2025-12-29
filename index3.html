@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analisi Fidia</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <style>
+        * { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        body { background: #f8fafc; }
+        .tab-active { background: #3b82f6; color: white; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3); }
+        .stat-card { transition: all 0.2s; }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .status-good { background: #d1fae5; color: #065f46; }
+        .status-ok { background: #fef3c7; color: #92400e; }
+        .status-bad { background: #fee2e2; color: #991b1b; }
+        input:focus, select:focus, textarea:focus { outline: 2px solid #3b82f6; outline-offset: 2px; }
+        .quick-input { border: 2px solid transparent; transition: all 0.2s; }
+        .quick-input:focus { border-color: #3b82f6; background: white; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        const PRODUCTS = ['PROLENS', 'OPTO RED', 'OPTO SOL', 'OPTO YAL', 'OPTO YAL CREAM', 'OPTO GEL', 'OPTO IDRO', 'OPTO RELAX', 'OPTO VITREO', 'RESPILENS 100', 'RESPILENS 360', 'OPTO CARE', 'OPTO MYO', 'OPTO OMEGA', 'BLU GEL', 'BLU YAL', 'IRIDIUM GARZE', 'TRIUM', 'VITREOXIGEN', 'LUTEINOMEGA', 'MERAMIRT', 'MYRIALEN GEL', 'MERAMIRT CM', 'MERAMIRT XG', 'LACRISEK'].sort();
+        const YEARS = ['2019', '2020', '2021', '2022', '2023', '2024', '2025', '2026'];
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxv9Xxi4i-Kw0pPK8Xd7YYFpqr992YCoTd7mZog77PYDlXosRMnY_3sQ6hZOC5pBgVq/exec';
+
+        function App() {
+          const [isAuthenticated, setIsAuthenticated] = useState(false);
+          const [password, setPassword] = useState('');
+          const [savedPassword, setSavedPassword] = useState('');
+          const [activeTab, setActiveTab] = useState('dashboard');
+          const [invoices, setInvoices] = useState([]);
+          const [creditNotes, setCreditNotes] = useState([]);
+          const [onlinePrices, setOnlinePrices] = useState({});
+          const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+          const [isLoading, setIsLoading] = useState(false);
+          const [searchTerm, setSearchTerm] = useState('');
+          
+          // Stati form fatture
+          const [invoiceDate, setInvoiceDate] = useState('');
+          const [invoiceNumber, setInvoiceNumber] = useState('');
+          const [shippingCost, setShippingCost] = useState('');
+          const [invoiceItems, setInvoiceItems] = useState([{ product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }]);
+          const [editingInvoice, setEditingInvoice] = useState(null);
+          
+          // Stati note credito
+          const [creditDate, setCreditDate] = useState(new Date().toISOString().split('T')[0]);
+          const [creditAmount, setCreditAmount] = useState('');
+          
+          const priceTimerRef = useRef(null);
+
+          useEffect(() => {
+            const stored = localStorage.getItem('fidiaAppPassword');
+            if (stored) { setSavedPassword(stored); setIsAuthenticated(true); loadFromGoogleSheets(stored); }
+          }, []);
+
+          const loadFromGoogleSheets = async (pwd = savedPassword) => {
+            setIsLoading(true);
+            try {
+              const response = await fetch(SCRIPT_URL);
+              if (!response.ok) throw new Error('Errore server');
+              const data = await response.json();
+              
+              const invoiceMap = {};
+              (data.invoices || []).forEach(row => {
+                if (!invoiceMap[row.id]) {
+                  let dateStr = row.date;
+                  if (typeof dateStr === 'string' && dateStr.includes('-')) dateStr = dateStr.split('T')[0];
+                  invoiceMap[row.id] = { id: row.id, year: row.year, date: dateStr, number: row.number, shippingCost: row.shippingCost || 0, items: [] };
+                }
+                invoiceMap[row.id].items.push({ product: row.product, quantity: row.quantity, priceGross: row.priceGross, priceNet: row.priceNet, discount: row.discount || 0, vat: row.vat, freebies: row.freebies });
+              });
+              
+              setInvoices(Object.values(invoiceMap));
+              setCreditNotes(data.creditNotes || []);
+              setOnlinePrices(data.onlinePrices || {});
+            } catch (error) {
+              console.error('Errore caricamento:', error);
+              alert('Errore nel caricamento dei dati');
+            }
+            setIsLoading(false);
+          };
+
+          const saveToGoogleSheets = async (action, payload) => {
+            if (!savedPassword) return false;
+            setIsLoading(true);
+            try {
+              await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ password: savedPassword, action, ...payload }), mode: 'no-cors' });
+              await new Promise(r => setTimeout(r, 1500));
+              await loadFromGoogleSheets();
+              return true;
+            } catch (error) {
+              console.error(error);
+              alert('Errore salvataggio');
+              setIsLoading(false);
+              return false;
+            }
+          };
+
+          const handleLogin = () => {
+            if (!password) return alert('Inserisci la password!');
+            localStorage.setItem('fidiaAppPassword', password);
+            setSavedPassword(password);
+            setIsAuthenticated(true);
+            loadFromGoogleSheets(password);
+          };
+
+          // FUNZIONI FATTURE
+          const addInvoiceItem = () => setInvoiceItems([...invoiceItems, { product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }]);
+          const removeInvoiceItem = (i) => setInvoiceItems(invoiceItems.filter((_, idx) => idx !== i));
+          const updateInvoiceItem = (i, field, value) => {
+            const updated = [...invoiceItems];
+            updated[i][field] = value;
+            if (field === 'price' && value) {
+              const discount = parseFloat(updated[i].discount) || 0;
+              updated[i].priceNet = (parseFloat(value) * (1 - discount / 100)).toFixed(4);
+            }
+            setInvoiceItems(updated);
+          };
+
+          const saveInvoice = async () => {
+            if (!invoiceDate || !invoiceNumber || invoiceItems.some(i => !i.product || !i.quantity || !i.price)) {
+              return alert('Compila tutti i campi obbligatori!');
+            }
+            const id = Date.now().toString();
+            const year = new Date(invoiceDate).getFullYear();
+            await saveToGoogleSheets('saveInvoice', { id, date: invoiceDate, number: invoiceNumber, year, shippingCost: parseFloat(shippingCost) || 0, items: invoiceItems });
+            resetForm();
+          };
+
+          const updateInvoice = async () => {
+            await saveToGoogleSheets('updateInvoice', { id: editingInvoice.id, date: invoiceDate, number: invoiceNumber, year: new Date(invoiceDate).getFullYear(), shippingCost: parseFloat(shippingCost) || 0, items: invoiceItems });
+            resetForm();
+          };
+
+          const deleteInvoice = async (id) => {
+            if (!confirm('Eliminare questa fattura?')) return;
+            await saveToGoogleSheets('deleteInvoice', { id });
+          };
+
+          const startEditInvoice = (inv) => {
+            setEditingInvoice(inv);
+            setInvoiceDate(inv.date);
+            setInvoiceNumber(inv.number);
+            setShippingCost(inv.shippingCost);
+            setInvoiceItems(inv.items.map(i => ({ product: i.product, quantity: i.quantity, price: i.priceGross, discount: i.discount, vat: i.vat, freebies: i.freebies })));
+            window.scrollTo(0, 0);
+          };
+
+          const resetForm = () => {
+            setEditingInvoice(null);
+            setInvoiceDate('');
+            setInvoiceNumber('');
+            setShippingCost('');
+            setInvoiceItems([{ product: '', quantity: '', price: '', discount: '', vat: '10', freebies: '' }]);
+          };
+
+          // FUNZIONI NOTE CREDITO
+          const saveCreditNote = async () => {
+            if (!creditDate || !creditAmount) return alert('Compila tutti i campi!');
+            const year = new Date(creditDate).getFullYear();
+            await saveToGoogleSheets('saveCreditNote', { id: Date.now().toString(), date: creditDate, amount: parseFloat(creditAmount), year });
+            setCreditDate(new Date().toISOString().split('T')[0]);
+            setCreditAmount('');
+          };
+
+          const deleteCreditNote = async (id) => {
+            if (!confirm('Eliminare questa nota di credito?')) return;
+            await saveToGoogleSheets('deleteCreditNote', { id });
+          };
+
+          // ANALISI (con ottimizzazione)
+          const analysis = useMemo(() => {
+            const result = {};
+            const filteredInvoices = selectedYear === 'all' ? invoices : invoices.filter(inv => String(inv.year) === selectedYear);
+            
+            const totalCostByYear = {};
+            filteredInvoices.forEach(invoice => {
+              const year = String(invoice.year);
+              if (!totalCostByYear[year]) totalCostByYear[year] = 0;
+              const totalPieces = invoice.items.reduce((sum, i) => sum + (parseFloat(i.quantity) || 0) + (parseFloat(i.freebies) || 0), 0);
+              const shipping = parseFloat(invoice.shippingCost) || 0;
+              invoice.items.forEach(item => {
+                const qty = parseFloat(item.quantity) || 0, free = parseFloat(item.freebies) || 0;
+                const netPrice = parseFloat(item.priceNet || item.price) || 0, vat = parseFloat(item.vat) || 0;
+                const totalQty = qty + free;
+                const shippingShare = totalPieces > 0 ? (totalQty / totalPieces) * shipping : 0;
+                const priceWithVAT = qty * netPrice * (1 + vat / 100);
+                const shippingWithVAT = shippingShare * 1.22;
+                totalCostByYear[year] += priceWithVAT + shippingWithVAT;
+              });
+            });
+
+            PRODUCTS.forEach(product => {
+              let totalCost = 0, totalQuantity = 0, yearCost = {};
+              filteredInvoices.forEach(invoice => {
+                const totalPieces = invoice.items.reduce((sum, i) => sum + (parseFloat(i.quantity) || 0) + (parseFloat(i.freebies) || 0), 0);
+                const shipping = parseFloat(invoice.shippingCost) || 0;
+                invoice.items.forEach(item => {
+                  if (item.product !== product) return;
+                  const qty = parseFloat(item.quantity) || 0, free = parseFloat(item.freebies) || 0;
+                  const netPrice = parseFloat(item.priceNet || item.price) || 0, vat = parseFloat(item.vat) || 0;
+                  const totalQty = qty + free;
+                  const shippingShare = totalPieces > 0 ? (totalQty / totalPieces) * shipping : 0;
+                  const priceWithVAT = qty * netPrice * (1 + vat / 100);
+                  const shippingWithVAT = shippingShare * 1.22;
+                  const itemCost = priceWithVAT + shippingWithVAT;
+                  totalCost += itemCost; totalQuantity += totalQty;
+                  if (!yearCost[invoice.year]) yearCost[invoice.year] = 0;
+                  yearCost[invoice.year] += itemCost;
+                });
+              });
+              
+              const relevantCredits = selectedYear === 'all' ? creditNotes : creditNotes.filter(c => String(c.year) === selectedYear);
+              relevantCredits.forEach(c => {
+                const creditYear = String(c.year);
+                if (yearCost[creditYear] && totalCostByYear[creditYear]) {
+                  const prop = yearCost[creditYear] / totalCostByYear[creditYear];
+                  yearCost[creditYear] -= c.amount * prop;
+                }
+              });
+
+              totalCost = Object.values(yearCost).reduce((s, v) => s + v, 0);
+              const avg = totalQuantity > 0 ? totalCost / totalQuantity : 0;
+              const online = parseFloat(onlinePrices[product]) || 0;
+              const margin = online > 0 ? ((online - avg) / online) * 100 : 0;
+              result[product] = { avg, online, margin, qty: totalQuantity };
+            });
+            return result;
+          }, [invoices, creditNotes, onlinePrices, selectedYear]);
+
+          const stats = useMemo(() => {
+            const totalCost = Object.values(analysis).reduce((s, d) => s + (d.avg * d.qty), 0);
+            const totalRevenue = Object.values(analysis).reduce((s, d) => s + (d.online * d.qty), 0);
+            const avgMargin = Object.values(analysis).filter(d => d.qty > 0).reduce((s, d) => s + d.margin, 0) / Math.max(Object.values(analysis).filter(d => d.qty > 0).length, 1);
+            const freebiesData = invoices.filter(inv => selectedYear === 'all' || String(inv.year) === selectedYear).reduce((acc, inv) => {
+              inv.items.forEach(item => {
+                const free = parseFloat(item.freebies) || 0;
+                if (free > 0) {
+                  acc.qty += free;
+                  const netPrice = parseFloat(item.priceNet || item.price) || 0, vat = parseFloat(item.vat) || 0;
+                  acc.value += free * netPrice * (1 + vat / 100);
+                }
+              });
+              return acc;
+            }, { qty: 0, value: 0 });
+            const totalPieces = Object.values(analysis).reduce((s, d) => s + d.qty, 0);
+            const freebiesPercent = totalPieces > 0 ? (freebiesData.qty / totalPieces) * 100 : 0;
+            return { totalCost, totalRevenue, avgMargin, freebiesData, freebiesPercent };
+          }, [analysis, invoices, selectedYear]);
+
+          const filteredProducts = useMemo(() => {
+            return Object.entries(analysis).filter(([name, data]) => {
+              if (data.qty === 0) return false;
+              if (!searchTerm) return true;
+              return name.toLowerCase().includes(searchTerm.toLowerCase());
+            }).sort((a, b) => b[1].margin - a[1].margin);
+          }, [analysis, searchTerm]);
+
+          if (!isAuthenticated) {
+            return (
+              <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+                <div className="bg-white rounded-2xl p-10 w-full max-w-md shadow-xl">
+                  <h1 className="text-3xl font-bold text-gray-800 text-center mb-8">Analisi Fidia</h1>
+                  <input type="password" value={password} onChange={e => setPassword(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleLogin()} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl mb-4" placeholder="Password" />
+                  <button onClick={handleLogin} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700">Accedi</button>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div className="min-h-screen bg-gray-50">
+              {/* HEADER */}
+              <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                      <h1 className="text-2xl font-bold text-gray-800">Analisi Fidia</h1>
+                      <p className="text-sm text-gray-500">Ottica Paoletti</p>
+                    </div>
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                      <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} className="px-4 py-2 border-2 border-gray-200 rounded-lg font-medium">
+                        <option value="all">Tutto</option>
+                        {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                      <button onClick={() => loadFromGoogleSheets()} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700" disabled={isLoading}>
+                        {isLoading ? '⏳' : '🔄'}
+                      </button>
+                      <button onClick={() => { localStorage.clear(); location.reload(); }} className="px-4 py-2 bg-red-50 text-red-600 rounded-lg font-medium hover:bg-red-100">
+                        Esci
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* TABS */}
+                  <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
+                    {[
+                      { id: 'dashboard', label: 'Dashboard' },
+                      { id: 'invoices', label: 'Fatture' },
+                      { id: 'credits', label: 'Note Credito' },
+                      { id: 'prices', label: 'Prezzi Online' }
+                    ].map(tab => (
+                      <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-6 py-2 rounded-lg font-medium whitespace-nowrap transition-all ${activeTab === tab.id ? 'tab-active' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </header>
+
+              <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+                {/* DASHBOARD */}
+                {activeTab === 'dashboard' && (
+                  <div className="space-y-6">
+                    {/* Stats */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="bg-white rounded-xl p-6 border-l-4 border-orange-500 stat-card">
+                        <p className="text-sm font-medium text-gray-500 mb-1">Totale Fatture</p>
+                        <p className="text-3xl font-bold text-gray-800">€ {stats.totalCost.toFixed(2)}</p>
+                      </div>
+                      <div className="bg-white rounded-xl p-6 border-l-4 border-blue-500 stat-card">
+                        <p className="text-sm font-medium text-gray-500 mb-1">Incasso Potenziale</p>
+                        <p className="text-3xl font-bold text-gray-800">€ {stats.totalRevenue.toFixed(2)}</p>
+                      </div>
+                      <div className="bg-white rounded-xl p-6 border-l-4 border-green-500 stat-card">
+                        <p className="text-sm font-medium text-gray-500 mb-1">Margine Medio</p>
+                        <p className={`text-3xl font-bold ${stats.avgMargin > 30 ? 'text-green-600' : stats.avgMargin > 20 ? 'text-yellow-600' : 'text-red-600'}`}>
+                          {stats.avgMargin.toFixed(1)}%
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">{stats.avgMargin > 30 ? 'Ottimo' : stats.avgMargin > 20 ? 'Buono' : 'Basso'}</p>
+                      </div>
+                      <div className="bg-white rounded-xl p-6 border-l-4 border-emerald-500 stat-card">
+                        <p className="text-sm font-medium text-gray-500 mb-1">Omaggi {selectedYear !== 'all' && selectedYear}</p>
+                        <p className="text-3xl font-bold text-gray-800">{stats.freebiesPercent.toFixed(1)}%</p>
+                        <p className="text-xs text-gray-500 mt-1">{stats.freebiesData.qty} pz • € {stats.freebiesData.value.toFixed(2)}</p>
+                      </div>
+                    </div>
+
+                    {/* Search */}
+                    <div className="bg-white rounded-xl p-4">
+                      <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="🔍 Cerca prodotto..." className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg" />
+                    </div>
+
+                    {/* Table */}
+                    <div className="bg-white rounded-xl shadow overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="bg-gray-50 border-b">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase">Prodotto</th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase">Costo Reale</th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase">Prezzo Online</th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase">Margine</th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase">Quantità</th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {filteredProducts.map(([name, data]) => (
+                              <tr key={name} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 font-medium text-gray-800">{name}</td>
+                                <td className="px-6 py-4 text-gray-700">€ {data.avg.toFixed(2)}</td>
+                                <td className="px-6 py-4 font-medium text-blue-600">€ {data.online.toFixed(2)}</td>
+                                <td className="px-6 py-4">
+                                  <span className={`font-bold ${data.margin > 30 ? 'text-green-600' : data.margin > 20 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                    {data.margin.toFixed(1)}%
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 text-gray-700">{data.qty} pz</td>
+                                <td className="px-6 py-4">
+                                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${data.margin > 30 ? 'status-good' : data.margin > 20 ? 'status-ok' : 'status-bad'}`}>
+                                    {data.margin > 30 ? 'Ottimo' : data.margin > 20 ? 'Buono' : 'Basso'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* FATTURE */}
+                {activeTab === 'invoices' && (
+                  <div className="space-y-6">
+                    <div className="bg-white rounded-xl p-6 shadow">
+                      <h2 className="text-xl font-bold text-gray-800 mb-6">{editingInvoice ? 'Modifica Fattura' : 'Nuova Fattura'}</h2>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Data Fattura</label>
+                          <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Numero Fattura</label>
+                          <input type="text" value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} placeholder="es. 3060003884" className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Spese Spedizione €</label>
+                          <input type="number" step="0.01" value={shippingCost} onChange={e => setShippingCost(e.target.value)} placeholder="0.00" className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg" />
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto mb-6">
+                        <table className="w-full">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-3 py-2 text-left text-xs font-bold text-gray-600">Quantità</th>
+                              <th className="px-3 py-2 text-left text-xs font-bold text-gray-600">Prodotto</th>
+                              <th className="px-3 py-2 text-left text-xs font-bold text-gray-600">Prezzo Unit. €</th>
+                              <th className="px-3 py-2 text-left text-xs font-bold text-gray-600">Sconto %</th>
+                              <th className="px-3 py-2 text-left text-xs font-bold text-gray-600">IVA %</th>
+                              <th className="px-3 py-2 text-left text-xs font-bold text-gray-600">Omaggi</th>
+                              <th className="px-3 py-2"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {invoiceItems.map((item, i) => (
+                              <tr key={i} className="border-b">
+                                <td className="px-3 py-2">
+                                  <input type="number" value={item.quantity} onChange={e => updateInvoiceItem(i, 'quantity', e.target.value)} className="w-20 px-2 py-1 border rounded" />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <select value={item.product} onChange={e => updateInvoiceItem(i, 'product', e.target.value)} className="w-full px-2 py-1 border rounded">
+                                    <option value="">Seleziona prodotto</option>
+                                    {PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
+                                  </select>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <input type="number" step="0.01" value={item.price} onChange={e => updateInvoiceItem(i, 'price', e.target.value)} className="w-24 px-2 py-1 border rounded" />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <input type="number" step="0.01" value={item.discount} onChange={e => updateInvoiceItem(i, 'discount', e.target.value)} className="w-16 px-2 py-1 border rounded" />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <select value={item.vat} onChange={e => updateInvoiceItem(i, 'vat', e.target.value)} className="w-20 px-2 py-1 border rounded">
+                                    <option value="10">10%</option>
+                                    <option value="22">22%</option>
+                                  </select>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <input type="number" value={item.freebies} onChange={e => updateInvoiceItem(i, 'freebies', e.target.value)} className="w-16 px-2 py-1 border rounded" />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <button onClick={() => removeInvoiceItem(i)} className="w-8 h-8 flex items-center justify-center bg-red-500 text-white rounded-lg hover:bg-red-600">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="flex gap-3">
+                        <button onClick={addInvoiceItem} className="px-5 py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50">
+                          + Aggiungi Riga
+                        </button>
+                        {editingInvoice ? (
+                          <>
+                            <button onClick={updateInvoice} disabled={isLoading} className="px-6 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700">
+                              Aggiorna Fattura
+                            </button>
+                            <button onClick={resetForm} className="px-5 py-2 bg-gray-500 text-white rounded-lg font-medium hover:bg-gray-600">
+                              Annulla
+                            </button>
+                          </>
+                        ) : (
+                          <button onClick={saveInvoice} disabled={isLoading} className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700">
+                            Salva Fattura
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl p-6 shadow">
+                      <h2 className="text-xl font-bold text-gray-800 mb-4">Fatture inserite ({invoices.length})</h2>
+                      <div className="space-y-3">
+                        {invoices.slice().sort((a, b) => b.date.localeCompare(a.date)).map(inv => (
+                          <div key={inv.id} className="border rounded-lg p-4 hover:bg-gray-50 flex justify-between items-start">
+                            <div>
+                              <div className="font-bold text-lg">{inv.number} - {inv.date} ({inv.year})</div>
+                              {inv.shippingCost > 0 && <div className="text-sm text-gray-600">Spese spedizione: €{inv.shippingCost.toFixed(2)}</div>}
+                              <div className="text-sm text-gray-700 mt-2">
+                                {inv.items.map((it, idx) => (
+                                  <div key={idx}>• {it.product}: {it.quantity} pz + {it.freebies || 0} omaggi @ €{it.priceGross} {it.discount > 0 && `(sconto ${it.discount}%)`}</div>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={() => startEditInvoice(inv)} disabled={isLoading} className="w-9 h-9 flex items-center justify-center bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                              </button>
+                              <button onClick={() => deleteInvoice(inv.id)} disabled={isLoading} className="w-9 h-9 flex items-center justify-center bg-red-500 text-white rounded-lg hover:bg-red-600">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* NOTE CREDITO */}
+                {activeTab === 'credits' && (
+                  <div className="space-y-6">
+                    <div className="bg-white rounded-xl p-6 shadow">
+                      <h2 className="text-xl font-bold text-gray-800 mb-6">Nuova Nota di Credito</h2>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Data</label>
+                          <input type="date" value={creditDate} onChange={e => setCreditDate(e.target.value)} className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Importo €</label>
+                          <input type="number" step="0.01" value={creditAmount} onChange={e => setCreditAmount(e.target.value)} placeholder="es. 250.00" className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg" />
+                        </div>
+                      </div>
+                      <button onClick={saveCreditNote} disabled={isLoading} className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700">
+                        Salva
+                      </button>
+                    </div>
+
+                    <div className="bg-white rounded-xl p-6 shadow">
+                      <h2 className="text-xl font-bold text-gray-800 mb-4">Note di Credito ({creditNotes.length})</h2>
+                      <div className="space-y-3">
+                        {creditNotes.slice().sort((a, b) => {
+                          const dateA = a.date || String(a.year);
+                          const dateB = b.date || String(b.year);
+                          return dateB.localeCompare(dateA);
+                        }).map(note => (
+                          <div key={note.id} className="border rounded-lg p-4 flex justify-between items-center hover:bg-gray-50">
+                            <div className="font-medium text-lg">{note.date || note.year} - € {note.amount.toFixed(2)}</div>
+                            <button onClick={() => deleteCreditNote(note.id)} disabled={isLoading} className="w-9 h-9 flex items-center justify-center bg-red-500 text-white rounded-lg hover:bg-red-600">
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* PREZZI ONLINE */}
+                {activeTab === 'prices' && (
+                  <div>
+                    <div className="bg-white rounded-xl p-4 mb-6 shadow">
+                      <p className="text-sm text-gray-600">I prezzi si salvano automaticamente dopo 2 secondi.</p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {PRODUCTS.map(prod => (
+                        <div key={prod} className="bg-white rounded-xl p-4 shadow border-2 border-gray-100 hover:border-blue-300 transition-all">
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-2">{prod}</label>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl font-bold text-gray-400">€</span>
+                            <input 
+                              type="number" 
+                              step="0.01" 
+                              value={onlinePrices[prod] || ''} 
+                              onChange={e => {
+                                const v = e.target.value;
+                                setOnlinePrices({...onlinePrices, [prod]: v});
+                                if (priceTimerRef.current) clearTimeout(priceTimerRef.current);
+                                priceTimerRef.current = setTimeout(() => saveToGoogleSheets('saveOnlinePrice', { product: prod, price: parseFloat(v) || 0 }), 2000);
+                              }} 
+                              className="w-full text-2xl font-bold text-gray-800 outline-none quick-input px-2 py-1 rounded" 
+                              placeholder="0.00"
+                              disabled={isLoading}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </main>
+            </div>
+          );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
