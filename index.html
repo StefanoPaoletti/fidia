@@ -178,6 +178,9 @@
           const handleLogin = async () => {
             if (!password) return setModal({ show: true, type: 'warning', title: 'Password richiesta', message: 'Inserisci la password per accedere.' });
             
+            // Chiudi eventuali modali aperti
+            setModal({ show: false, type: '', title: '', message: '' });
+            
             setIsLoading(true);
             try {
               // Verifica password facendo una chiamata POST di test
@@ -196,7 +199,8 @@
                 return setModal({ show: true, type: 'error', title: 'Password errata', message: 'La password inserita non è corretta.' });
               }
               
-              // Password corretta
+              // Password corretta - chiudi modale e procedi
+              setModal({ show: false, type: '', title: '', message: '' });
               localStorage.setItem('fidiaAppPassword', password);
               setSavedPassword(password);
               setIsAuthenticated(true);
