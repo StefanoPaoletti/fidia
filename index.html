@@ -83,6 +83,7 @@
           const [listiniPubblico, setListiniPubblico] = useState({});
           const [detraibili, setDetraibili] = useState({});
           const [categorie, setCategorie] = useState({});
+          const [esclusiListino, setEsclusiListino] = useState({});
           const [productListSearch, setProductListSearch] = useState('');
           const [showWarningModal, setShowWarningModal] = useState(false);
           const [warningProduct, setWarningProduct] = useState('');
@@ -163,6 +164,7 @@
               setListiniPubblico(data.listiniPubblico || {});
               setDetraibili(data.detraibili || {});
               setCategorie(data.categorie || {});
+              setEsclusiListino(data.esclusiListino || {});
               console.log('✅ Dati caricati con successo');
             } catch (error) {
               console.error('❌ Errore caricamento completo:', error);
@@ -486,10 +488,19 @@
           const stampaListino = () => {
             const prodotti = PRODUCTS
               .filter(p => (onlinePrices[p] || 0) > 0)
+              .filter(p => !esclusiListino[p])
               .sort((a, b) => a.localeCompare(b));
             if (prodotti.length === 0) return setModal({ show: true, type: 'warning', title: 'Nessun prodotto', message: 'Non ci sono prodotti con prezzo di vendita da stampare.' });
             
             const oggi = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            
+            // Colore per categoria
+            const COLORI = {
+              'Gocce oculari': '#0284c7',
+              'Integratori': '#d97706',
+              'Salviette': '#0d9488',
+              'Altro': '#6b7280'
+            };
             
             // Raggruppa per categoria (ordine fisso, senza categoria in fondo)
             const gruppi = {};
@@ -499,35 +510,43 @@
               gruppi[c].push(p);
             });
             
-            const rigaProdotto = (p, i) => {
+            const rigaProdotto = (col) => (p, i) => {
               const listino = listiniPubblico[p] > 0 ? '€ ' + parseFloat(listiniPubblico[p]).toFixed(2) : '—';
               const vendita = '€ ' + parseFloat(onlinePrices[p]).toFixed(2);
-              const detr = detraibili[p] ? 'SÌ' : '—';
-              return '<tr' + (i % 2 === 1 ? ' class="alt"' : '') + '><td class="nome">' + p + '</td><td>' + listino + '</td><td class="vendita">' + vendita + '</td><td class="detr">' + detr + '</td></tr>';
+              const detr = detraibili[p] ? '<span class="si">SÌ</span>' : '<span class="nd">—</span>';
+              return '<tr' + (i % 2 === 1 ? ' class="alt"' : '') + '>' +
+                     '<td class="nome" style="border-left: 2.5pt solid ' + col + '">' + p + '</td>' +
+                     '<td>' + listino + '</td><td class="vendita">' + vendita + '</td><td class="detr">' + detr + '</td></tr>';
             };
             
             const righe = CATEGORIE.filter(c => gruppi[c] && gruppi[c].length > 0).map(c => {
-              return '<tr class="cat"><td colspan="4">' + c.toUpperCase() + '</td></tr>' +
-                     gruppi[c].map(rigaProdotto).join('');
+              const col = COLORI[c] || COLORI['Altro'];
+              return '<tr class="cat"><td colspan="4" style="background: ' + col + '">' + c.toUpperCase() + '</td></tr>' +
+                     gruppi[c].map(rigaProdotto(col)).join('');
             }).join('');
             
             const html = '<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><title>Listino Negozio</title><style>' +
-              '@page { size: A4; margin: 15mm; }' +
+              '@page { size: A4; margin: 12mm; }' +
+              '* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
               'body { font-family: -apple-system, Arial, sans-serif; color: #111; margin: 0; }' +
-              'h1 { font-size: 20pt; margin: 0 0 2mm 0; }' +
-              '.sub { font-size: 10pt; color: #555; margin-bottom: 6mm; }' +
+              '.head { background: #1e40af; color: #fff; padding: 5mm 6mm; border-radius: 2mm; margin-bottom: 6mm; }' +
+              '.head h1 { font-size: 19pt; margin: 0; color: #fff; }' +
+              '.head .sub { font-size: 9.5pt; color: #dbeafe; margin-top: 1.5mm; }' +
               'table { width: 100%; border-collapse: collapse; font-size: 11pt; }' +
-              'th { text-align: left; border-bottom: 2pt solid #111; padding: 2mm 2mm; font-size: 9.5pt; text-transform: uppercase; }' +
-              'td { padding: 2.2mm 2mm; border-bottom: 0.5pt solid #bbb; }' +
-              'tr.alt td { background: #f2f2f2; }' +
-              'tr.cat td { background: #111; color: #fff; font-weight: 700; font-size: 10.5pt; letter-spacing: 0.05em; padding: 2.5mm 2mm; border: none; }' +
+              'th { text-align: left; border-bottom: 2pt solid #111; padding: 2mm 2mm; font-size: 9pt; text-transform: uppercase; color: #444; }' +
+              'td { padding: 2.2mm 2.5mm; border-bottom: 0.5pt solid #ccc; }' +
+              'tr.alt td { background: #f6f6f6; }' +
+              'tr.cat td { color: #fff; font-weight: 700; font-size: 10.5pt; letter-spacing: 0.06em; padding: 2.6mm 2.5mm; border: none; border-radius: 1mm; }' +
               '.nome { font-weight: 600; }' +
-              '.vendita { font-weight: 700; }' +
+              '.vendita { font-weight: 700; color: #1e40af; font-size: 11.5pt; }' +
+              '.si { background: #16a34a; color: #fff; font-weight: 700; font-size: 8.5pt; padding: 0.8mm 2.5mm; border-radius: 2mm; }' +
+              '.nd { color: #999; }' +
               'th:nth-child(2), td:nth-child(2), th:nth-child(3), td:nth-child(3) { text-align: right; white-space: nowrap; }' +
               'th:nth-child(4), td:nth-child(4) { text-align: center; }' +
+              'tr.cat { page-break-after: avoid; }' +
               '</style></head><body>' +
-              '<h1>Listino Prezzi Negozio</h1>' +
-              '<div class="sub">Prezzi di vendita allineati a otticapaoletti.it — aggiornato al ' + oggi + '</div>' +
+              '<div class="head"><h1>Listino Prezzi Negozio</h1>' +
+              '<div class="sub">Prezzi di vendita allineati a otticapaoletti.it — aggiornato al ' + oggi + '</div></div>' +
               '<table><thead><tr><th>Prodotto</th><th>Listino al pubblico</th><th>Prezzo di vendita</th><th>Detraibile</th></tr></thead>' +
               '<tbody>' + righe + '</tbody></table>' +
               '<script>window.onload = function() { window.print(); };<\/script>' +
@@ -1815,6 +1834,30 @@
                                   className="w-4 h-4 accent-blue-600"
                                 />
                                 <span className="text-xs text-gray-600 hidden sm:inline">Detraibile</span>
+                              </label>
+                              <label className="flex items-center gap-1.5 mr-1 cursor-pointer select-none" title="Includi nel listino da stampare">
+                                <input
+                                  type="checkbox"
+                                  checked={!esclusiListino[product]}
+                                  onChange={async e => {
+                                    const incluso = e.target.checked;
+                                    const old = { ...esclusiListino };
+                                    const upd = { ...esclusiListino };
+                                    if (incluso) delete upd[product]; else upd[product] = true;
+                                    setEsclusiListino(upd);
+                                    try {
+                                      await fetch(SCRIPT_URL, {
+                                        method: 'POST',
+                                        body: JSON.stringify({ action: 'setInListino', password: savedPassword, name: product, inListino: incluso ? '' : 'NO' })
+                                      });
+                                    } catch (err) {
+                                      setEsclusiListino(old);
+                                      setModal({ show: true, type: 'error', title: 'Errore', message: err.message });
+                                    }
+                                  }}
+                                  className="w-4 h-4 accent-emerald-600"
+                                />
+                                <span className="text-xs text-gray-600 hidden sm:inline">Listino</span>
                               </label>
                               <button
                                 onClick={() => {
