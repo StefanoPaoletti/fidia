@@ -513,7 +513,7 @@
             const rigaProdotto = (col) => (p, i) => {
               const listino = listiniPubblico[p] > 0 ? '€ ' + parseFloat(listiniPubblico[p]).toFixed(2) : '—';
               const vendita = '€ ' + parseFloat(onlinePrices[p]).toFixed(2);
-              const detr = detraibili[p] ? '<span class="si">SÌ</span>' : '<span class="nd">—</span>';
+              const detr = detraibili[p] ? '<span class="si">SÌ</span>' : '<span class="no">NO</span>';
               return '<tr' + (i % 2 === 1 ? ' class="alt"' : '') + '>' +
                      '<td class="nome" style="border-left: 2.5pt solid ' + col + '">' + p + '</td>' +
                      '<td>' + listino + '</td><td class="vendita">' + vendita + '</td><td class="detr">' + detr + '</td></tr>';
@@ -521,32 +521,31 @@
             
             const righe = CATEGORIE.filter(c => gruppi[c] && gruppi[c].length > 0).map(c => {
               const col = COLORI[c] || COLORI['Altro'];
-              return '<tr class="cat"><td colspan="4" style="background: ' + col + '">' + c.toUpperCase() + '</td></tr>' +
+              return '<tr class="cat"><td colspan="4" style="color: ' + col + '; border-bottom: 1.5pt solid ' + col + '">' + c.toUpperCase() + '</td></tr>' +
                      gruppi[c].map(rigaProdotto(col)).join('');
             }).join('');
             
             const html = '<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><title>Listino Negozio</title><style>' +
-              '@page { size: A4; margin: 12mm; }' +
+              '@page { size: A4; margin: 10mm; }' +
               '* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
               'body { font-family: -apple-system, Arial, sans-serif; color: #111; margin: 0; }' +
-              '.head { background: #1e40af; color: #fff; padding: 5mm 6mm; border-radius: 2mm; margin-bottom: 6mm; }' +
-              '.head h1 { font-size: 19pt; margin: 0; color: #fff; }' +
-              '.head .sub { font-size: 9.5pt; color: #dbeafe; margin-top: 1.5mm; }' +
-              'table { width: 100%; border-collapse: collapse; font-size: 11pt; }' +
-              'th { text-align: left; border-bottom: 2pt solid #111; padding: 2mm 2mm; font-size: 9pt; text-transform: uppercase; color: #444; }' +
-              'td { padding: 2.2mm 2.5mm; border-bottom: 0.5pt solid #ccc; }' +
+              'h1 { font-size: 16pt; margin: 0 0 1mm 0; color: #1e40af; }' +
+              '.sub { font-size: 9pt; color: #555; margin-bottom: 3mm; }' +
+              'table { width: 100%; border-collapse: collapse; font-size: 10.5pt; }' +
+              'th { text-align: left; border-bottom: 1.5pt solid #111; padding: 1.2mm 2mm; font-size: 8.5pt; text-transform: uppercase; color: #444; }' +
+              'td { padding: 1.5mm 2.5mm; border-bottom: 0.5pt solid #ccc; }' +
               'tr.alt td { background: #f6f6f6; }' +
-              'tr.cat td { color: #fff; font-weight: 700; font-size: 10.5pt; letter-spacing: 0.06em; padding: 2.6mm 2.5mm; border: none; border-radius: 1mm; }' +
+              'tr.cat td { background: none; font-weight: 800; font-size: 10pt; letter-spacing: 0.06em; padding: 2.2mm 2.5mm 1mm 0; }' +
               '.nome { font-weight: 600; }' +
-              '.vendita { font-weight: 700; color: #1e40af; font-size: 11.5pt; }' +
-              '.si { background: #16a34a; color: #fff; font-weight: 700; font-size: 8.5pt; padding: 0.8mm 2.5mm; border-radius: 2mm; }' +
-              '.nd { color: #999; }' +
+              '.vendita { font-weight: 700; color: #1e40af; font-size: 11pt; }' +
+              '.si { background: #16a34a; color: #fff; font-weight: 700; font-size: 8pt; padding: 0.5mm 2mm; border-radius: 2mm; }' +
+              '.no { color: #dc2626; font-weight: 700; font-size: 8.5pt; }' +
               'th:nth-child(2), td:nth-child(2), th:nth-child(3), td:nth-child(3) { text-align: right; white-space: nowrap; }' +
               'th:nth-child(4), td:nth-child(4) { text-align: center; }' +
               'tr.cat { page-break-after: avoid; }' +
               '</style></head><body>' +
-              '<div class="head"><h1>Listino Prezzi Negozio</h1>' +
-              '<div class="sub">Prezzi di vendita allineati a otticapaoletti.it — aggiornato al ' + oggi + '</div></div>' +
+              '<h1>Listino Prezzi Negozio</h1>' +
+              '<div class="sub">Prezzi di vendita allineati a otticapaoletti.it — aggiornato al ' + oggi + '</div>' +
               '<table><thead><tr><th>Prodotto</th><th>Listino al pubblico</th><th>Prezzo di vendita</th><th>Detraibile</th></tr></thead>' +
               '<tbody>' + righe + '</tbody></table>' +
               '<script>window.onload = function() { window.print(); };<\/script>' +
