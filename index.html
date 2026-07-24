@@ -595,6 +595,7 @@
               let purchasedQty = 0;
               let freebiesQty = 0;
               let listinoTotal = 0;
+              let listinoTotalConOmaggi = 0;
               let yearCost = {};
               let yearQuantity = {};
               
@@ -622,6 +623,7 @@
                   purchasedQty += qty;
                   freebiesQty += free;
                   listinoTotal += qty * grossPrice * (1 + vat / 100);
+                  listinoTotalConOmaggi += totalQty * grossPrice * (1 + vat / 100);
                   
                   if (!yearCost[invoice.year]) yearCost[invoice.year] = 0;
                   if (!yearQuantity[invoice.year]) yearQuantity[invoice.year] = 0;
@@ -652,7 +654,8 @@
                 ? Object.values(prodSales).reduce((a, b) => a + b, 0)
                 : (prodSales[selectedYear] || 0);
               
-              const listino = purchasedQty > 0 ? listinoTotal / purchasedQty : 0;
+              const listinoOmaggi = (purchasedQty + freebiesQty) > 0 ? listinoTotalConOmaggi / (purchasedQty + freebiesQty) : 0;
+              const listino = purchasedQty > 0 ? listinoTotal / purchasedQty : listinoOmaggi;
               
               result[product] = { avgRealCost: avgCost, onlinePrice: online, margin, totalQuantity, purchasedQty, freebiesQty, listino, soldQuantity };
             });
