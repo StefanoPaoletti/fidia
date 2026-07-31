@@ -89,6 +89,7 @@
           const [giacenze, setGiacenze] = useState({});
           const [giacenzeData, setGiacenzeData] = useState({});
           const [magazzinoInput, setMagazzinoInput] = useState({});
+          const [magazzinoSearch, setMagazzinoSearch] = useState('');
           const [productListSearch, setProductListSearch] = useState('');
           const [showWarningModal, setShowWarningModal] = useState(false);
           const [warningProduct, setWarningProduct] = useState('');
@@ -885,7 +886,7 @@
                     </div>
                   </div>
                   <div className="flex gap-2 sm:gap-4 mt-4 sm:mt-6 overflow-x-auto pb-2 -mx-4 px-4">
-                    {['dashboard', 'magazzino', 'ricavi', 'invoices', 'credits', 'products'].map(tab => (
+                    {['dashboard', 'magazzino', 'ricavi', 'products', 'invoices', 'credits'].map(tab => (
                       <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
@@ -1153,7 +1154,7 @@
                     }
                   };
                   
-                  const visibili = magazzino.filter(m => !m.escluso);
+                  const visibili = magazzino.filter(m => !m.escluso && m.prodotto.toLowerCase().includes(magazzinoSearch.toLowerCase()));
                   const daRiordinare = visibili.filter(m => m.mesiScorta !== null && m.mesiScorta < 2).length;
                   
                   return (
@@ -1176,6 +1177,21 @@
                           </div>
                         </div>
                         <p className="text-sm text-gray-500">Ordinato per più venduto negli ultimi 6 mesi. {daRiordinare > 0 && <span className="text-red-600 font-medium">{daRiordinare} prodotti sotto i 2 mesi di scorta.</span>}</p>
+                        <div className="relative mt-4">
+                          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                          </svg>
+                          <input
+                            type="text"
+                            placeholder="Cerca prodotto..."
+                            value={magazzinoSearch}
+                            onChange={e => setMagazzinoSearch(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                          {magazzinoSearch && (
+                            <button onClick={() => setMagazzinoSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">✕</button>
+                          )}
+                        </div>
                       </div>
                       
                       <div className="bg-white rounded-xl shadow overflow-hidden">
