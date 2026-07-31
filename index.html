@@ -92,6 +92,7 @@
           const [magazzinoSearch, setMagazzinoSearch] = useState('');
           const [scadenze, setScadenze] = useState({});
           const [scadenzaInput, setScadenzaInput] = useState({});
+          const [margineScadenza, setMargineScadenza] = useState(4);
           const [productListSearch, setProductListSearch] = useState('');
           const [showWarningModal, setShowWarningModal] = useState(false);
           const [warningProduct, setWarningProduct] = useState('');
@@ -186,6 +187,9 @@
               setGiacenze(data.giacenze || {});
               setGiacenzeData(data.giacenzeData || {});
               setScadenze(data.scadenze || {});
+              if (data.margineScadenza !== undefined && data.margineScadenza !== null && data.margineScadenza !== '') {
+                setMargineScadenza(parseFloat(data.margineScadenza));
+              }
             } catch (error) {
               setModal({ show: true, type: 'error', title: 'Errore caricamento', message: error.message });
             }
@@ -797,7 +801,10 @@
                 const [sy, sm] = scad.split('-').map(Number);
                 const oggiY = oggi.getFullYear(), oggiM = oggi.getMonth() + 1;
                 mesiAScadenza = (sy - oggiY) * 12 + (sm - oggiM);
-                const venderoEntroScad = ritmoMensile * Math.max(0, mesiAScadenza);
+                // Scadenza "utile": i clienti smettono di comprare il prodotto
+                // margineScadenza mesi PRIMA della data reale.
+                const mesiUtili = mesiAScadenza - (parseFloat(margineScadenza) || 0);
+                const venderoEntroScad = ritmoMensile * Math.max(0, mesiUtili);
                 pezziARischio = inCasa > venderoEntroScad ? Math.round(inCasa - venderoEntroScad) : 0;
               }
               
@@ -817,7 +824,7 @@
                 escluso: !!esclusiListino[prodotto]
               };
             }).sort((a, b) => b.venduti6Mesi - a.venduti6Mesi);
-          }, [invoices, salesMonthly, giacenze, giacenzeData, scadenze, esclusiListino]);
+          }, [invoices, salesMonthly, giacenze, giacenzeData, scadenze, esclusiListino, margineScadenza]);
           
           if (!isAuthenticated) {
             return (
@@ -1249,6 +1256,32 @@
                           </div>
                         </div>
                         <p className="text-sm text-gray-500">Ordinato per più venduto negli ultimi 6 mesi. {daRiordinare > 0 && <span className="text-red-600 font-medium">{daRiordinare} sotto i 2 mesi di scorta. </span>}{aRischioScad > 0 && <span className="text-orange-600 font-medium">{aRischioScad} a rischio scadenza.</span>}</p>
+                        <div className="flex items-center gap-2 mt-3 text-sm">
+                          <span className="text-gray-700">Margine di sicurezza scadenza:</span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={margineScadenza}
+                            onChange={e => setMargineScadenza(e.target.value)}
+                            onBlur={async () => {
+                              const v = parseFloat(margineScadenza) || 0;
+                              try {
+                                await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'setMargineScadenza', password: savedPassword, valore: v }), mode: 'no-cors' });
+                              } catch (err) {}
+                            }}
+                            className="w-16 px-2 py-1 border rounded-lg text-center"
+                          />
+                          <span className="text-gray-700">mesi prima</span>
+                          <div className="relative group info-icon">
+                            <svg className="w-5 h-5 text-gray-400 cursor-help" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+                            </svg>
+                            <div className="absolute left-1/2 -translate-x-1/2 top-7 hidden group-hover:block z-10 w-64 px-3 py-2 text-xs text-white bg-gray-700 rounded-lg shadow-xl">
+                              I clienti smettono di comprare un prodotto quando manca poco alla scadenza. Con 4 mesi, l'app considera "difficili da vendere" i pezzi già 4 mesi prima della data.
+                              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-700 transform rotate-45"></div>
+                            </div>
+                          </div>
+                        </div>
                         <div className="relative mt-4">
                           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
