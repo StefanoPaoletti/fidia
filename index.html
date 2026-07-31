@@ -86,6 +86,9 @@
           const [detraibili, setDetraibili] = useState({});
           const [categorie, setCategorie] = useState({});
           const [esclusiListino, setEsclusiListino] = useState({});
+          const [giacenze, setGiacenze] = useState({});
+          const [giacenzeData, setGiacenzeData] = useState({});
+          const [magazzinoInput, setMagazzinoInput] = useState({});
           const [productListSearch, setProductListSearch] = useState('');
           const [showWarningModal, setShowWarningModal] = useState(false);
           const [warningProduct, setWarningProduct] = useState('');
@@ -177,6 +180,8 @@
               setDetraibili(data.detraibili || {});
               setCategorie(data.categorie || {});
               setEsclusiListino(data.esclusiListino || {});
+              setGiacenze(data.giacenze || {});
+              setGiacenzeData(data.giacenzeData || {});
             } catch (error) {
               setModal({ show: true, type: 'error', title: 'Errore caricamento', message: error.message });
             }
@@ -705,6 +710,71 @@
             return result;
           }, [invoices, creditNotes]);
           
+          // MAGAZZINO: giacenza stimata + statistiche per prodotto
+          const magazzino = useMemo(() => {
+            const oggi = new Date();
+            const seiMesiFa = new Date();
+            seiMesiFa.setMonth(seiMesiFa.getMonth() - 6);
+            const seiMesiYM = seiMesiFa.toISOString().substring(0, 7);
+            
+            return PRODUCTS.map(prodotto => {
+              // Entrati (acquistati + omaggi) da tutte le fatture, con data
+              let entratiDopoConta = 0;
+              let entratiTotali = 0;
+              const dataConta = giacenzeData[prodotto] || null; // 'YYYY-MM-DD' o null
+              
+              invoices.forEach(inv => {
+                inv.items.forEach(item => {
+                  if (item.product !== prodotto) return;
+                  const pezzi = (parseFloat(item.quantity) || 0) + (parseFloat(item.freebies) || 0);
+                  entratiTotali += pezzi;
+                  if (!dataConta || inv.date > dataConta) entratiDopoConta += pezzi;
+                });
+              });
+              
+              // Venduti online (Shopify) per mese: totale, dopo la conta, ultimi 6 mesi
+              let vendutiDopoConta = 0;
+              let vendutiTotali = 0;
+              let venduti6Mesi = 0;
+              const mesiProdotto = salesMonthly[prodotto] || {};
+              Object.keys(mesiProdotto).forEach(ym => {
+                const q = mesiProdotto[ym] || 0;
+                vendutiTotali += q;
+                // confronto mese conta: uso il mese della data conta (YYYY-MM)
+                if (!dataConta || ym > dataConta.substring(0, 7)) vendutiDopoConta += q;
+                if (ym >= seiMesiYM) venduti6Mesi += q;
+              });
+              
+              const giacenzaBase = giacenze[prodotto];
+              const haGiacenza = giacenzaBase !== undefined && giacenzaBase !== null && giacenzaBase !== '';
+              
+              // Pezzi in casa stimati
+              let inCasa;
+              if (haGiacenza) {
+                inCasa = parseFloat(giacenzaBase) + entratiDopoConta - vendutiDopoConta;
+              } else {
+                // Nessuna conta mai fatta: stima grezza entrati - venduti (tutto lo storico)
+                inCasa = entratiTotali - vendutiTotali;
+              }
+              
+              // Mesi di scorta rimanenti al ritmo degli ultimi 6 mesi
+              const ritmoMensile = venduti6Mesi / 6;
+              const mesiScorta = ritmoMensile > 0 ? inCasa / ritmoMensile : null;
+              
+              return {
+                prodotto,
+                inCasa,
+                haGiacenza,
+                dataConta,
+                venduti6Mesi,
+                vendutiTotali,
+                ritmoMensile,
+                mesiScorta,
+                escluso: !!esclusiListino[prodotto]
+              };
+            }).sort((a, b) => b.venduti6Mesi - a.venduti6Mesi);
+          }, [invoices, salesMonthly, giacenze, giacenzeData, esclusiListino]);
+          
           if (!isAuthenticated) {
             return (
               <>
@@ -815,13 +885,13 @@
                     </div>
                   </div>
                   <div className="flex gap-2 sm:gap-4 mt-4 sm:mt-6 overflow-x-auto pb-2 -mx-4 px-4">
-                    {['dashboard', 'ricavi', 'invoices', 'credits', 'products'].map(tab => (
+                    {['dashboard', 'magazzino', 'ricavi', 'invoices', 'credits', 'products'].map(tab => (
                       <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
                         className={`px-4 sm:px-6 py-2 rounded font-medium whitespace-nowrap text-sm sm:text-base transition-all ${activeTab === tab ? 'tab-active' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
                       >
-                        {tab === 'dashboard' ? 'Dashboard' : tab === 'ricavi' ? 'Ricavi' : tab === 'invoices' ? 'Fatture' : tab === 'credits' ? 'Note Credito' : 'Prodotti'}
+                        {tab === 'dashboard' ? 'Dashboard' : tab === 'magazzino' ? 'Magazzino' : tab === 'ricavi' ? 'Ricavi' : tab === 'invoices' ? 'Fatture' : tab === 'credits' ? 'Note Credito' : 'Prodotti'}
                       </button>
                     ))}
                   </div>
@@ -1061,6 +1131,108 @@
                     </div>
                   </div>
                 )}
+                
+                {/* MAGAZZINO */}
+                {activeTab === 'magazzino' && (() => {
+                  const salvaGiacenza = async (prodotto) => {
+                    const val = magazzinoInput[prodotto];
+                    if (val === undefined || val === '') return;
+                    const oggi = new Date().toISOString().split('T')[0];
+                    // optimistic update
+                    setGiacenze({ ...giacenze, [prodotto]: parseFloat(val) });
+                    setGiacenzeData({ ...giacenzeData, [prodotto]: oggi });
+                    setMagazzinoInput({ ...magazzinoInput, [prodotto]: '' });
+                    try {
+                      await fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'setGiacenza', password: savedPassword, name: prodotto, giacenza: parseFloat(val), data: oggi }),
+                        mode: 'no-cors'
+                      });
+                    } catch (err) {
+                      setModal({ show: true, type: 'error', title: 'Errore', message: err.message });
+                    }
+                  };
+                  
+                  const visibili = magazzino.filter(m => !m.escluso);
+                  const daRiordinare = visibili.filter(m => m.mesiScorta !== null && m.mesiScorta < 2).length;
+                  
+                  return (
+                    <div className="space-y-6">
+                      <div className="bg-white rounded-lg shadow p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h2 className="text-2xl font-bold text-gray-800">Magazzino</h2>
+                          <div className="relative group info-icon">
+                            <svg className="w-6 h-6 text-gray-400 cursor-help" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+                            </svg>
+                            <div className="absolute left-1/2 -translate-x-1/2 top-8 hidden group-hover:block z-10 w-72 sm:w-96 px-3 py-2.5 text-xs sm:text-sm text-white bg-gray-700 rounded-lg shadow-xl">
+                              <div className="space-y-1">
+                                <div>Quando conti i pezzi a scaffale, scrivi il numero reale nel campo e premi Salva: da lì l'app riparte contando gli acquisti e le vendite online successivi.</div>
+                                <div>"In casa" = ultima conta + entrati − venduti online da quella data.</div>
+                                <div>Non usare questi numeri per aggiornare lo stock su Shopify: è una stima per capire cosa riordinare.</div>
+                              </div>
+                              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-700 transform rotate-45"></div>
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-sm text-gray-500">Ordinato per più venduto negli ultimi 6 mesi. {daRiordinare > 0 && <span className="text-red-600 font-medium">{daRiordinare} prodotti sotto i 2 mesi di scorta.</span>}</p>
+                      </div>
+                      
+                      <div className="bg-white rounded-xl shadow overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead className="bg-gray-50 border-b">
+                              <tr>
+                                <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">Prodotto</th>
+                                <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase">In casa</th>
+                                <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase">Venduti 6 mesi</th>
+                                <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase">Scorta</th>
+                                <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">Conta pezzi</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {visibili.map(m => {
+                                const scortaColor = m.mesiScorta === null ? 'text-gray-400' : m.mesiScorta < 1 ? 'text-red-600' : m.mesiScorta < 2 ? 'text-orange-500' : 'text-green-600';
+                                return (
+                                  <tr key={m.prodotto} className="hover:bg-gray-50">
+                                    <td className="px-4 py-3 font-medium text-gray-800">
+                                      {m.prodotto}
+                                      {!m.haGiacenza && <span className="ml-2 text-xs text-gray-400">(mai contato)</span>}
+                                    </td>
+                                    <td className={`px-4 py-3 text-right font-bold ${m.inCasa <= 0 ? 'text-red-600' : 'text-gray-800'}`}>{Math.round(m.inCasa)} pz</td>
+                                    <td className="px-4 py-3 text-right text-indigo-600 font-medium">{m.venduti6Mesi} pz</td>
+                                    <td className={`px-4 py-3 text-right font-medium ${scortaColor}`}>
+                                      {m.mesiScorta === null ? '—' : m.mesiScorta > 24 ? '24+ mesi' : m.mesiScorta.toFixed(1) + ' mesi'}
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <div className="flex items-center gap-2 justify-center">
+                                        <input
+                                          type="number"
+                                          value={magazzinoInput[m.prodotto] || ''}
+                                          onChange={e => setMagazzinoInput({ ...magazzinoInput, [m.prodotto]: e.target.value })}
+                                          onKeyPress={e => e.key === 'Enter' && salvaGiacenza(m.prodotto)}
+                                          placeholder={m.haGiacenza ? String(Math.round(m.inCasa)) : '?'}
+                                          className="w-20 px-2 py-1.5 border rounded-lg text-sm text-right"
+                                        />
+                                        <button
+                                          onClick={() => salvaGiacenza(m.prodotto)}
+                                          className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs font-medium whitespace-nowrap"
+                                        >
+                                          Salva
+                                        </button>
+                                      </div>
+                                      {m.dataConta && <div className="text-xs text-gray-400 text-center mt-1">contato il {m.dataConta.split('-').reverse().join('/')}</div>}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
                 
                 {/* RICAVI */}
                 {activeTab === 'ricavi' && (() => {
