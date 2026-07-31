@@ -90,6 +90,8 @@
           const [giacenzeData, setGiacenzeData] = useState({});
           const [magazzinoInput, setMagazzinoInput] = useState({});
           const [magazzinoSearch, setMagazzinoSearch] = useState('');
+          const [scadenze, setScadenze] = useState({});
+          const [scadenzaInput, setScadenzaInput] = useState({});
           const [productListSearch, setProductListSearch] = useState('');
           const [showWarningModal, setShowWarningModal] = useState(false);
           const [warningProduct, setWarningProduct] = useState('');
@@ -183,6 +185,7 @@
               setEsclusiListino(data.esclusiListino || {});
               setGiacenze(data.giacenze || {});
               setGiacenzeData(data.giacenzeData || {});
+              setScadenze(data.scadenze || {});
             } catch (error) {
               setModal({ show: true, type: 'error', title: 'Errore caricamento', message: error.message });
             }
@@ -762,6 +765,30 @@
               const ritmoMensile = venduti6Mesi / 6;
               const mesiScorta = ritmoMensile > 0 ? inCasa / ritmoMensile : null;
               
+              // Venduto al banco stimato (uscite non-online) da quando si traccia:
+              // tutto ciò che è entrato meno ciò che c'è + ciò che è uscito online.
+              // Ha senso solo se almeno una conta è stata fatta.
+              let bancoStimato = null;
+              if (haGiacenza) {
+                // entrati totali storici - venduti online totali - quello che risulta in casa
+                bancoStimato = entratiTotali - vendutiTotali - parseFloat(inCasa);
+                if (bancoStimato < 0) bancoStimato = 0; // arrotondamenti/conta più alta del teorico
+              }
+              
+              // Analisi scadenza (formato salvato: 'YYYY-MM')
+              const scad = scadenze[prodotto] || null;
+              let mesiAScadenza = null;
+              let pezziARischio = null;
+              if (scad && /^\d{4}-\d{2}$/.test(scad)) {
+                const [sy, sm] = scad.split('-').map(Number);
+                const oggiY = oggi.getFullYear(), oggiM = oggi.getMonth() + 1;
+                mesiAScadenza = (sy - oggiY) * 12 + (sm - oggiM);
+                // quanti pezzi venderò da qui alla scadenza, al ritmo attuale
+                const venderoEntroScad = ritmoMensile * Math.max(0, mesiAScadenza);
+                // se ne ho più di quanti ne venderò, il resto scade
+                pezziARischio = inCasa > venderoEntroScad ? Math.round(inCasa - venderoEntroScad) : 0;
+              }
+              
               return {
                 prodotto,
                 inCasa,
@@ -771,10 +798,14 @@
                 vendutiTotali,
                 ritmoMensile,
                 mesiScorta,
+                bancoStimato,
+                scad,
+                mesiAScadenza,
+                pezziARischio,
                 escluso: !!esclusiListino[prodotto]
               };
             }).sort((a, b) => b.venduti6Mesi - a.venduti6Mesi);
-          }, [invoices, salesMonthly, giacenze, giacenzeData, esclusiListino]);
+          }, [invoices, salesMonthly, giacenze, giacenzeData, scadenze, esclusiListino]);
           
           if (!isAuthenticated) {
             return (
@@ -1154,8 +1185,24 @@
                     }
                   };
                   
+                  const salvaScadenza = async (prodotto) => {
+                    const val = scadenzaInput[prodotto]; // atteso 'YYYY-MM' dal type=month
+                    setScadenze({ ...scadenze, [prodotto]: val || '' });
+                    setScadenzaInput({ ...scadenzaInput, [prodotto]: undefined });
+                    try {
+                      await fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'setScadenza', password: savedPassword, name: prodotto, scadenza: val || '' }),
+                        mode: 'no-cors'
+                      });
+                    } catch (err) {
+                      setModal({ show: true, type: 'error', title: 'Errore', message: err.message });
+                    }
+                  };
+                  
                   const visibili = magazzino.filter(m => !m.escluso && m.prodotto.toLowerCase().includes(magazzinoSearch.toLowerCase()));
                   const daRiordinare = visibili.filter(m => m.mesiScorta !== null && m.mesiScorta < 2).length;
+                  const aRischioScad = visibili.filter(m => m.pezziARischio !== null && m.pezziARischio > 0).length;
                   
                   return (
                     <div className="space-y-6">
@@ -1176,7 +1223,7 @@
                             </div>
                           </div>
                         </div>
-                        <p className="text-sm text-gray-500">Ordinato per più venduto negli ultimi 6 mesi. {daRiordinare > 0 && <span className="text-red-600 font-medium">{daRiordinare} prodotti sotto i 2 mesi di scorta.</span>}</p>
+                        <p className="text-sm text-gray-500">Ordinato per più venduto negli ultimi 6 mesi. {daRiordinare > 0 && <span className="text-red-600 font-medium">{daRiordinare} sotto i 2 mesi di scorta. </span>}{aRischioScad > 0 && <span className="text-orange-600 font-medium">{aRischioScad} a rischio scadenza.</span>}</p>
                         <div className="relative mt-4">
                           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
@@ -1202,7 +1249,9 @@
                                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">Prodotto</th>
                                 <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase">In casa</th>
                                 <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase">Venduti 6 mesi</th>
+                                <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase">Banco stim.</th>
                                 <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase">Scorta</th>
+                                <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">Scadenza</th>
                                 <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">Conta pezzi</th>
                               </tr>
                             </thead>
@@ -1217,8 +1266,28 @@
                                     </td>
                                     <td className={`px-4 py-3 text-right font-bold ${m.inCasa <= 0 ? 'text-red-600' : 'text-gray-800'}`}>{Math.round(m.inCasa)} pz</td>
                                     <td className="px-4 py-3 text-right text-indigo-600 font-medium">{m.venduti6Mesi} pz</td>
+                                    <td className="px-4 py-3 text-right text-gray-500">{m.bancoStimato === null ? '—' : m.bancoStimato + ' pz'}</td>
                                     <td className={`px-4 py-3 text-right font-medium ${scortaColor}`}>
                                       {m.mesiScorta === null ? '—' : m.mesiScorta > 24 ? '24+ mesi' : m.mesiScorta.toFixed(1) + ' mesi'}
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <div className="flex flex-col items-center gap-1">
+                                        <div className="flex items-center gap-1.5">
+                                          <input
+                                            type="month"
+                                            value={scadenzaInput[m.prodotto] !== undefined ? scadenzaInput[m.prodotto] : (m.scad || '')}
+                                            onChange={e => setScadenzaInput({ ...scadenzaInput, [m.prodotto]: e.target.value })}
+                                            className="px-2 py-1 border rounded-lg text-xs"
+                                          />
+                                          <button onClick={() => salvaScadenza(m.prodotto)} className="px-2 py-1 bg-gray-700 text-white rounded-lg hover:bg-gray-800 text-xs font-medium">OK</button>
+                                        </div>
+                                        {m.pezziARischio !== null && m.pezziARischio > 0 && (
+                                          <div className="text-xs text-red-600 font-semibold text-center">⚠ ~{m.pezziARischio} pz scadono</div>
+                                        )}
+                                        {m.pezziARischio === 0 && m.scad && (
+                                          <div className="text-xs text-green-600 text-center">✓ in tempo</div>
+                                        )}
+                                      </div>
                                     </td>
                                     <td className="px-4 py-3">
                                       <div className="flex items-center gap-2 justify-center">
