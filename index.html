@@ -1198,13 +1198,26 @@
                   };
                   
                   const salvaScadenza = async (prodotto) => {
-                    const val = scadenzaInput[prodotto]; // atteso 'YYYY-MM' dal type=month
-                    setScadenze({ ...scadenze, [prodotto]: val || '' });
+                    // Se non è stato toccato l'input, non fare nulla (evita di svuotare al secondo OK)
+                    if (scadenzaInput[prodotto] === undefined) return;
+                    const raw = scadenzaInput[prodotto].trim();
+                    // Normalizza in 'YYYY-MM' per il salvataggio
+                    let norm = '';
+                    if (raw) {
+                      let mm = null, yy = null, mt;
+                      if ((mt = raw.match(/^(\d{4})[-\/](\d{1,2})$/))) { yy = +mt[1]; mm = +mt[2]; }
+                      else if ((mt = raw.match(/^(\d{1,2})[-\/](\d{4})$/))) { mm = +mt[1]; yy = +mt[2]; }
+                      if (yy && mm >= 1 && mm <= 12) norm = yy + '-' + String(mm).padStart(2, '0');
+                      else {
+                        return setModal({ show: true, type: 'warning', title: 'Formato data', message: 'Scrivi la scadenza come MM/AAAA, ad esempio 09/2026.' });
+                      }
+                    }
+                    setScadenze({ ...scadenze, [prodotto]: norm });
                     setScadenzaInput({ ...scadenzaInput, [prodotto]: undefined });
                     try {
                       await fetch(SCRIPT_URL, {
                         method: 'POST',
-                        body: JSON.stringify({ action: 'setScadenza', password: savedPassword, name: prodotto, scadenza: val || '' }),
+                        body: JSON.stringify({ action: 'setScadenza', password: savedPassword, name: prodotto, scadenza: norm }),
                         mode: 'no-cors'
                       });
                     } catch (err) {
