@@ -86,6 +86,7 @@
           const [detraibili, setDetraibili] = useState({});
           const [categorie, setCategorie] = useState({});
           const [esclusiListino, setEsclusiListino] = useState({});
+          const [inattivi, setInattivi] = useState({});
           const [giacenze, setGiacenze] = useState({});
           const [giacenzeData, setGiacenzeData] = useState({});
           const [magazzinoInput, setMagazzinoInput] = useState({});
@@ -184,6 +185,7 @@
               setDetraibili(data.detraibili || {});
               setCategorie(data.categorie || {});
               setEsclusiListino(data.esclusiListino || {});
+              setInattivi(data.inattivi || {});
               setGiacenze(data.giacenze || {});
               setGiacenzeData(data.giacenzeData || {});
               setScadenze(data.scadenze || {});
@@ -821,10 +823,11 @@
                 scad,
                 mesiAScadenza,
                 pezziARischio,
-                escluso: !!esclusiListino[prodotto]
+                escluso: !!esclusiListino[prodotto],
+                inattivo: !!inattivi[prodotto]
               };
             }).sort((a, b) => b.venduti6Mesi - a.venduti6Mesi);
-          }, [invoices, salesMonthly, giacenze, giacenzeData, scadenze, esclusiListino, margineScadenza]);
+          }, [invoices, salesMonthly, giacenze, giacenzeData, scadenze, esclusiListino, inattivi, margineScadenza]);
           
           if (!isAuthenticated) {
             return (
@@ -1232,7 +1235,7 @@
                     }
                   };
                   
-                  const visibili = magazzino.filter(m => !m.escluso && m.prodotto.toLowerCase().includes(magazzinoSearch.toLowerCase()));
+                  const visibili = magazzino.filter(m => !m.inattivo && m.prodotto.toLowerCase().includes(magazzinoSearch.toLowerCase()));
                   const daRiordinare = visibili.filter(m => m.mesiScorta !== null && m.mesiScorta < 2).length;
                   const aRischioScad = visibili.filter(m => m.pezziARischio !== null && m.pezziARischio > 0).length;
                   
@@ -2179,6 +2182,30 @@
                                   className="w-4 h-4 accent-emerald-600"
                                 />
                                 <span className="text-xs text-gray-600 hidden sm:inline">Listino</span>
+                              </label>
+                              <label className="flex items-center gap-1.5 mr-1 cursor-pointer select-none" title="Mostra nel tab Magazzino">
+                                <input
+                                  type="checkbox"
+                                  checked={!inattivi[product]}
+                                  onChange={async e => {
+                                    const attivo = e.target.checked;
+                                    const old = { ...inattivi };
+                                    const upd = { ...inattivi };
+                                    if (attivo) delete upd[product]; else upd[product] = true;
+                                    setInattivi(upd);
+                                    try {
+                                      await fetch(SCRIPT_URL, {
+                                        method: 'POST',
+                                        body: JSON.stringify({ action: 'setAttivo', password: savedPassword, name: product, attivo: attivo ? '' : 'NO' })
+                                      });
+                                    } catch (err) {
+                                      setInattivi(old);
+                                      setModal({ show: true, type: 'error', title: 'Errore', message: err.message });
+                                    }
+                                  }}
+                                  className="w-4 h-4 accent-orange-500"
+                                />
+                                <span className="text-xs text-gray-600 hidden sm:inline">Attivo</span>
                               </label>
                               <button
                                 onClick={() => {
