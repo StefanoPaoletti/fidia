@@ -1287,7 +1287,7 @@
                                         <div className="flex items-center gap-1.5">
                                           <input
                                             type="text"
-                                            value={scadenzaInput[m.prodotto] !== undefined ? scadenzaInput[m.prodotto] : (m.scad || '')}
+                                            value={scadenzaInput[m.prodotto] !== undefined ? scadenzaInput[m.prodotto] : (m.scad ? m.scad.split('-').reverse().join('/') : '')}
                                             onChange={e => setScadenzaInput({ ...scadenzaInput, [m.prodotto]: e.target.value })}
                                             onKeyPress={e => e.key === 'Enter' && salvaScadenza(m.prodotto)}
                                             placeholder="MM/AAAA"
