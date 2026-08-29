@@ -295,6 +295,24 @@
             const validItems = invoiceItems.filter(i => i.product && compilato(i.quantity) && compilato(i.price) && ((parseFloat(i.quantity) || 0) + (parseFloat(i.freebies) || 0)) > 0);
             if (!invoiceDate || !invoiceNumber || validItems.length === 0) return setModal({ show: true, type: 'warning', title: 'Campi obbligatori', message: 'Compila data, numero fattura e almeno una riga con prodotto, prezzo e quantità (o omaggi) maggiore di zero.' });
             
+            // Controllo anno sospetto (non tra anno scorso, corrente, prossimo)
+            const annoFattura = new Date(invoiceDate).getFullYear();
+            const annoOggi = new Date().getFullYear();
+            if (annoFattura < annoOggi - 1 || annoFattura > annoOggi + 1) {
+              return setConfirmModal({
+                show: true,
+                title: 'La data sembra sbagliata',
+                message: `Hai inserito una fattura datata ${annoFattura}. Controlla che l'anno sia corretto: un anno sbagliato falsa il magazzino. Vuoi salvare comunque?`,
+                onConfirm: () => {
+                  setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
+                  saveInvoiceConfermata(validItems);
+                }
+              });
+            }
+            saveInvoiceConfermata(validItems);
+          };
+          
+          const saveInvoiceConfermata = async (validItems) => {
             const shipping = parseFloat(shippingCost) || 0;
             const year = new Date(invoiceDate).getFullYear().toString();
             
@@ -326,6 +344,23 @@
             const validItems = invoiceItems.filter(i => i.product && compilato(i.quantity) && compilato(i.price) && ((parseFloat(i.quantity) || 0) + (parseFloat(i.freebies) || 0)) > 0);
             if (!invoiceDate || !invoiceNumber || validItems.length === 0) return setModal({ show: true, type: 'warning', title: 'Campi obbligatori', message: 'Compila data, numero fattura e almeno una riga con prodotto, prezzo e quantità (o omaggi) maggiore di zero.' });
             
+            const annoFattura = new Date(invoiceDate).getFullYear();
+            const annoOggi = new Date().getFullYear();
+            if (annoFattura < annoOggi - 1 || annoFattura > annoOggi + 1) {
+              return setConfirmModal({
+                show: true,
+                title: 'La data sembra sbagliata',
+                message: `Hai inserito una fattura datata ${annoFattura}. Controlla che l'anno sia corretto: un anno sbagliato falsa il magazzino. Vuoi salvare comunque?`,
+                onConfirm: () => {
+                  setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
+                  updateInvoiceConfermata(validItems);
+                }
+              });
+            }
+            updateInvoiceConfermata(validItems);
+          };
+          
+          const updateInvoiceConfermata = async (validItems) => {
             const shipping = parseFloat(shippingCost) || 0;
             const year = new Date(invoiceDate).getFullYear().toString();
             
@@ -726,23 +761,17 @@
             const seiMesiYM = seiMesiFa.toISOString().substring(0, 7);
             
             return PRODUCTS.map(prodotto => {
-              const dataConta = giacenzeData[prodotto] || null; // 'YYYY-MM-DD' o null
-              // Mese della conta (YYYY-MM). Le vendite/acquisti DI QUEL MESE sono
-              // già "dentro" il numero contato a scaffale, quindi non vanno
-              // ri-sommati. Conto solo i movimenti dei mesi SUCCESSIVI.
-              const meseConta = dataConta ? dataConta.substring(0, 7) : null;
-              
-              // Entrati (acquistati + omaggi) da tutte le fatture
+              // Entrati (acquistati + omaggi) da tutte le fatture, con data
               let entratiDopoConta = 0;
               let entratiTotali = 0;
+              const dataConta = giacenzeData[prodotto] || null; // 'YYYY-MM-DD' o null
+              
               invoices.forEach(inv => {
                 inv.items.forEach(item => {
                   if (item.product !== prodotto) return;
                   const pezzi = (parseFloat(item.quantity) || 0) + (parseFloat(item.freebies) || 0);
                   entratiTotali += pezzi;
-                  // solo fatture di mesi successivi al mese della conta
-                  const meseFattura = String(inv.date).substring(0, 7);
-                  if (!meseConta || meseFattura > meseConta) entratiDopoConta += pezzi;
+                  if (!dataConta || inv.date > dataConta) entratiDopoConta += pezzi;
                 });
               });
               
@@ -754,8 +783,8 @@
               Object.keys(mesiProdotto).forEach(ym => {
                 const q = mesiProdotto[ym] || 0;
                 vendutiTotali += q;
-                // solo vendite di mesi successivi al mese della conta (coerente con gli entrati)
-                if (!meseConta || ym > meseConta) vendutiDopoConta += q;
+                // confronto mese conta: uso il mese della data conta (YYYY-MM)
+                if (!dataConta || ym > dataConta.substring(0, 7)) vendutiDopoConta += q;
                 if (ym >= seiMesiYM) venduti6Mesi += q;
               });
               
