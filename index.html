@@ -48,6 +48,7 @@
           const [sales, setSales] = useState({});
           const [ricavi, setRicavi] = useState({});
           const [salesMonthly, setSalesMonthly] = useState({});
+          const [salesDaily, setSalesDaily] = useState({});
           const [shippingRates, setShippingRates] = useState([]);
           const [ricaviYear, setRicaviYear] = useState(new Date().getFullYear().toString());
           const [newShipRate, setNewShipRate] = useState('');
@@ -178,6 +179,7 @@
               setSales(data.sales || {});
               setRicavi(data.ricavi || {});
               setSalesMonthly(data.salesMonthly || {});
+              setSalesDaily(data.salesDaily || {});
               setShippingRates(data.tariffeSpedizione || []);
               setSkus(data.skus || {});
               setListiniPubblico(data.listiniPubblico || {});
@@ -775,18 +777,37 @@
                 });
               });
               
-              // Venduti online (Shopify) per mese: totale, dopo la conta, ultimi 6 mesi
+              // Venduti online (Shopify): totale, ultimi 6 mesi, e "dopo la conta".
+              // Il "dopo la conta" è il punto delicato: per i mesi SUCCESSIVI al mese
+              // della conta uso il totale mensile; per il MESE della conta uso il
+              // dettaglio giornaliero (scheda VenditeGiornaliere) così sottraggo solo
+              // le vendite dei giorni effettivamente dopo la data della conta.
               let vendutiDopoConta = 0;
               let vendutiTotali = 0;
               let venduti6Mesi = 0;
+              const meseConta = dataConta ? dataConta.substring(0, 7) : null;
               const mesiProdotto = salesMonthly[prodotto] || {};
               Object.keys(mesiProdotto).forEach(ym => {
                 const q = mesiProdotto[ym] || 0;
                 vendutiTotali += q;
-                // confronto mese conta: uso il mese della data conta (YYYY-MM)
-                if (!dataConta || ym > dataConta.substring(0, 7)) vendutiDopoConta += q;
                 if (ym >= seiMesiYM) venduti6Mesi += q;
+                if (!meseConta) {
+                  // nessuna conta: il "dopo conta" non serve (si usa la stima grezza)
+                } else if (ym > meseConta) {
+                  // mesi interamente successivi alla conta: sottrai tutto il mese
+                  vendutiDopoConta += q;
+                }
+                // il mese della conta lo gestisco a parte col dettaglio giornaliero
               });
+              // Mese della conta: sottrai solo le vendite dei giorni DOPO la data conta
+              if (meseConta) {
+                const giorniProdotto = salesDaily[prodotto] || {};
+                Object.keys(giorniProdotto).forEach(ymd => {
+                  if (ymd.substring(0, 7) === meseConta && ymd > dataConta) {
+                    vendutiDopoConta += giorniProdotto[ymd] || 0;
+                  }
+                });
+              }
               
               const giacenzaBase = giacenze[prodotto];
               const haGiacenza = giacenzaBase !== undefined && giacenzaBase !== null && giacenzaBase !== '';
@@ -859,7 +880,7 @@
                 escluso: !!esclusiListino[prodotto]
               };
             }).sort((a, b) => b.venduti6Mesi - a.venduti6Mesi);
-          }, [invoices, salesMonthly, giacenze, giacenzeData, scadenze, esclusiListino, margineScadenza]);
+          }, [invoices, salesMonthly, salesDaily, giacenze, giacenzeData, scadenze, esclusiListino, margineScadenza]);
           
           if (!isAuthenticated) {
             return (
