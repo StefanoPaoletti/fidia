@@ -1709,8 +1709,11 @@
                                       <input
                                         ref={el => productInputRefs.current[i] = el}
                                         type="text"
-                                        value={productSearchQuery[i] || item.product || ''}
+                                        value={productSearchQuery[i] !== undefined ? productSearchQuery[i] : (item.product || '')}
                                         onChange={e => {
+                                          const updated = [...invoiceItems];
+                                          updated[i].product = '';
+                                          setInvoiceItems(updated);
                                           setProductSearchQuery({...productSearchQuery, [i]: e.target.value});
                                           setProductDropdownOpen({...productDropdownOpen, [i]: true});
                                         }}
@@ -1739,9 +1742,9 @@
                                                 onClick={() => {
                                                   const updated = [...invoiceItems];
                                                   updated[i].product = p;
-                                                  if (ivaProdotti[p]) updated[i].vat = String(ivaProdotti[p]);
+                                                  updated[i].vat = ivaProdotti[p] ? String(ivaProdotti[p]) : '';
                                                   setInvoiceItems(updated);
-                                                  setProductSearchQuery({...productSearchQuery, [i]: ''});
+                                                  const nq = {...productSearchQuery}; delete nq[i]; setProductSearchQuery(nq);
                                                   setProductDropdownOpen({...productDropdownOpen, [i]: false});
                                                 }}
                                                 className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm border-b border-gray-100 last:border-b-0"
@@ -1794,6 +1797,8 @@
                                       onChange={e => updateInvoiceItem(i, 'vat', e.target.value)} 
                                       className="w-20 sm:w-24 px-2 sm:px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
                                     >
+                                      <option value="">—</option>
+                                      <option value="4">4%</option>
                                       <option value="10">10%</option>
                                       <option value="22">22%</option>
                                     </select>
