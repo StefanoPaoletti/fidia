@@ -82,10 +82,12 @@
           const [newProductListino, setNewProductListino] = useState('');
           const [newProductDetraibile, setNewProductDetraibile] = useState(false);
           const [newProductCategoria, setNewProductCategoria] = useState('');
+          const [newProductIva, setNewProductIva] = useState('');
           const [skus, setSkus] = useState({});
           const [listiniPubblico, setListiniPubblico] = useState({});
           const [detraibili, setDetraibili] = useState({});
           const [categorie, setCategorie] = useState({});
+          const [ivaProdotti, setIvaProdotti] = useState({});
           const [esclusiListino, setEsclusiListino] = useState({});
           const [giacenze, setGiacenze] = useState({});
           const [giacenzeData, setGiacenzeData] = useState({});
@@ -185,6 +187,7 @@
               setListiniPubblico(data.listiniPubblico || {});
               setDetraibili(data.detraibili || {});
               setCategorie(data.categorie || {});
+              setIvaProdotti(data.ivaProdotti || {});
               setEsclusiListino(data.esclusiListino || {});
               setGiacenze(data.giacenze || {});
               setGiacenzeData(data.giacenzeData || {});
@@ -1734,7 +1737,10 @@
                                               <div
                                                 key={p}
                                                 onClick={() => {
-                                                  updateInvoiceItem(i, 'product', p);
+                                                  const updated = [...invoiceItems];
+                                                  updated[i].product = p;
+                                                  if (ivaProdotti[p]) updated[i].vat = String(ivaProdotti[p]);
+                                                  setInvoiceItems(updated);
                                                   setProductSearchQuery({...productSearchQuery, [i]: ''});
                                                   setProductDropdownOpen({...productDropdownOpen, [i]: false});
                                                 }}
@@ -2073,6 +2079,19 @@
                             {CATEGORIE.map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
                         </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Aliquota IVA</label>
+                          <select
+                            value={newProductIva}
+                            onChange={e => setNewProductIva(e.target.value)}
+                            className="w-full px-3 py-2 border rounded-lg bg-white"
+                          >
+                            <option value="">— Non impostata —</option>
+                            <option value="4">4%</option>
+                            <option value="10">10%</option>
+                            <option value="22">22%</option>
+                          </select>
+                        </div>
                       </div>
                       <div className="mb-4">
                         <label className="flex items-center gap-2 cursor-pointer">
@@ -2092,7 +2111,7 @@
                             setIsLoading(true);
                             try {
                               const action = editingProduct ? 'updateProduct' : 'addProduct';
-                              const extra = { sku: newProductSku, listinoPubblico: parseFloat(newProductListino) || 0, detraibile: newProductDetraibile ? 'SI' : '', categoria: newProductCategoria };
+                              const extra = { sku: newProductSku, listinoPubblico: parseFloat(newProductListino) || 0, detraibile: newProductDetraibile ? 'SI' : '', categoria: newProductCategoria, iva: newProductIva };
                               const payload = editingProduct 
                                 ? { action, password: savedPassword, oldName: editingProduct, newName: newProductName, price: parseFloat(newProductPrice), ...extra }
                                 : { action, password: savedPassword, name: newProductName, price: parseFloat(newProductPrice), ...extra };
@@ -2108,6 +2127,7 @@
                               setNewProductListino('');
                               setNewProductDetraibile(false);
                               setNewProductCategoria('');
+                              setNewProductIva('');
                               setEditingProduct(null);
                             } catch (err) {
                               setModal({ show: true, type: 'error', title: 'Errore prodotto', message: err.message });
@@ -2129,6 +2149,7 @@
                               setNewProductListino('');
                               setNewProductDetraibile(false);
                               setNewProductCategoria('');
+                              setNewProductIva('');
                             }}
                             className="px-6 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium"
                           >
@@ -2245,6 +2266,7 @@
                                   setNewProductListino(listiniPubblico[product] || '');
                                   setNewProductDetraibile(!!detraibili[product]);
                                   setNewProductCategoria(categorie[product] || '');
+                                  setNewProductIva(ivaProdotti[product] ? String(ivaProdotti[product]) : '');
                                   window.scrollTo({ top: 0, behavior: 'smooth' });
                                 }}
                                 className="w-9 h-9 flex items-center justify-center text-blue-600 hover:bg-blue-50 rounded-lg"
