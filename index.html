@@ -1611,7 +1611,14 @@
                                 <tbody className="divide-y divide-gray-100">
                                   {rows.map(x => (
                                     <tr key={x.ym} className="hover:bg-gray-50">
-                                      <td className="px-4 py-3 font-medium text-gray-800 whitespace-nowrap">{monthNames[parseInt(x.ym.substring(5, 7), 10) - 1]} {x.year}</td>
+                                      <td className="px-4 py-3 font-medium text-gray-800 whitespace-nowrap">
+                                        {monthNames[parseInt(x.ym.substring(5, 7), 10) - 1]} {x.year}
+                                        {(x.r.prodotti || 0) > 0 && (
+                                          <span className="ml-2 text-xs font-semibold px-2 py-0.5 bg-green-50 text-green-700 rounded">
+                                            {(x.margineProdotti / x.r.prodotti * 100).toFixed(1)}%
+                                          </span>
+                                        )}
+                                      </td>
                                       <td className="px-4 py-3 text-right text-blue-600 font-medium whitespace-nowrap">€ {(x.r.prodotti || 0).toFixed(2)}</td>
                                       <td className="px-4 py-3 text-right text-gray-700 whitespace-nowrap">€ {(x.r.spedizioni || 0).toFixed(2)}</td>
                                       <td className="px-4 py-3 text-right text-orange-600 whitespace-nowrap">€ {x.costoProdotti.toFixed(2)}</td>
